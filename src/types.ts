@@ -1,0 +1,51 @@
+export interface Capability {
+  id: string;
+  path: string;
+  method: string;
+  summary: string;
+  isRead: boolean;
+  operationId?: string;
+  inputSchema?: any;
+  outputSchema?: any;
+}
+
+export interface Intent {
+  goal: string;
+  selectedCapabilities: string[];
+}
+
+export interface ExecutionNode {
+  id: string;
+  capabilityId: string;
+  capability: Capability;
+  type: 'READ' | 'MUTATION';
+  bindings: Record<string, any>;
+}
+
+export interface ExecutionEdge {
+  from: string;
+  to: string;
+}
+
+export interface jdCard {
+  version: string;
+  intent: Intent;
+  capabilities: {
+    mode: 'READ_ONLY' | 'WRITE_ALLOWED';
+    requiredEndpoints: string[];
+  };
+  execution: {
+    nodes: ExecutionNode[];
+    edges: ExecutionEdge[];
+  };
+  ui: {
+    layout: any[];
+    componentRegistryVersion: string;
+  };
+  metadata: {
+    specUrl: string;
+    createdAt: string;
+  };
+}
+
+export type ViewType = 'spec' | 'intent' | 'plan' | 'lab' | 'preview';

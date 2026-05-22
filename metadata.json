@@ -1,0 +1,6 @@
+{
+  "name": "API2UI Studio",
+  "description": "A schema-constrained orchestration compiler that turns OpenAPI specs into deterministic UI projections and execution graphs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
