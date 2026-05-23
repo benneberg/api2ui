@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Database, 
@@ -22,7 +22,10 @@ import {
   Info,
   Download,
   CheckCircle,
-  FileJson
+  FileJson,
+  Undo2,
+  Redo2,
+  AlertCircle
 } from 'lucide-react';
 import { openApiService } from './services/openapiService';
 import { geminiService } from './services/geminiService';
@@ -30,62 +33,9 @@ import { compilerService } from './services/compilerService';
 import { validateJdCard } from './services/validationService';
 import { type Capability, type Intent, type jdCard, type ViewType } from './types';
 import { cn } from './lib/utils';
-
-// Technical Component Registry
-const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
-  const data = result.data;
-  
-  // If it's a list (array of objects)
-  if (Array.isArray(data) && data.length > 0) {
-    const columns = Object.keys(data[0]);
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 border-b-2 border-brand-ink pb-2">
-          <TableIcon size={18} />
-          <span className="font-mono text-xs font-bold uppercase">{result.endpoint}</span>
-          <span className="ml-auto mono-label text-brand-accent">TABLE_COMPOSITE // n={data.length}</span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full border-2 border-brand-ink text-[11px] font-mono">
-            <thead>
-              <tr className="bg-brand-ink text-white uppercase tracking-wider italic">
-                {columns.map((h) => (
-                  <th key={h} className="p-3 text-left border-r border-white/20 last:border-0">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-brand-ink">
-              {data.map((row: any, idx: number) => (
-                <tr key={idx} className="hover:bg-brand-accent/5 transition-colors">
-                  {columns.map((col, j) => (
-                    <td key={j} className="p-3 border-r border-brand-line last:border-0 truncate font-medium">
-                      {typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback / Single Object
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 border-b-2 border-brand-ink pb-2">
-        <Play size={18} />
-        <span className="font-mono text-xs font-bold uppercase">{result.endpoint}</span>
-        <span className="ml-auto mono-label text-brand-accent">SINGLE_OBJECT_PROJECTION</span>
-      </div>
-      <div className="bg-gray-50 border border-brand-line p-6 font-mono text-xs">
-        <pre>{JSON.stringify(data, null, 2)}</pre>
-      </div>
-    </div>
-  );
-};
+import { Toasts, type Toast } from './components/Toasts';
+import { useHistory } from './hooks/useHistory';
+import { ProjectionRenderer, SchemaForm } from './components/ProjectionRenderer';
 
 export default function App() {
   const [activeView, setActiveView] = useState<ViewType>('spec');
@@ -95,7 +45,30 @@ export default function App() {
   const [jobDescription, setJobDescription] = useState('');
   const [intent, setIntent] = useState<Intent | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [jdCard, setJdCard] = useState<jdCard | null>(null);
+  
+  // History controlled jdCard
+  const { 
+    current: jdCard, 
+    push: pushToHistory, 
+    undo, 
+    redo, 
+    canUndo, 
+    canRedo 
+  } = useHistory<jdCard | null>(null);
+
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const addToast = useCallback((message: string, type: Toast['type'] = 'info', details?: string[]) => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { id, message, type, details }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   const [writeEnabled, setWriteEnabled] = useState(false);
   const [showWriteConfirm, setShowWriteConfirm] = useState(false);
   const [specValidationErrors, setSpecValidationErrors] = useState<string[]>([]);
@@ -115,11 +88,14 @@ export default function App() {
       setCapabilities(caps);
       if (validationErrors && validationErrors.length > 0) {
         setSpecValidationErrors(validationErrors);
+        addToast("Spec ingestion complete with warnings", "info");
       } else {
+        addToast("Capability Graph Synchronized", "success");
         setActiveView('intent');
       }
     } catch (err) {
       setError("Failed to ingest spec. Check the URL or CORS settings.");
+      addToast("Spec Ingestion Failed", "error");
     } finally {
       setIsIngesting(false);
     }
@@ -148,9 +124,11 @@ export default function App() {
       }
       const extractedIntent = await geminiService.extractIntent(jobDescription, capabilities, llmModel);
       setIntent(extractedIntent);
+      addToast("Intent Decoded Successfully", "success");
       setActiveView('plan');
     } catch (err) {
       setError("Failed to extract intent. Ensure GEMINI_API_KEY is configured.");
+      addToast("AI Generation Failed", "error");
     } finally {
       setIsExtracting(false);
     }
@@ -165,11 +143,13 @@ export default function App() {
     const { valid, errors } = validateJdCard(compiled);
     if (!valid) {
       console.error("jdCard Validation Errors:", errors);
-      setError(`Schema Validation Failed: ${errors?.[0]?.message || 'Unknown error'}`);
+      const errorDetails = errors?.map(e => `${e.instancePath || 'root'} ${e.message}`);
+      addToast("Schema Validation Failed", "error", errorDetails);
       return;
     }
 
-    setJdCard(compiled);
+    pushToHistory(compiled);
+    addToast("jdCard Artifact Compiled & Validated", "success");
     setActiveView('lab');
   };
 
@@ -258,15 +238,36 @@ export default function App() {
             </div>
           </div>
 
-          <button 
-            onClick={toggleWriteMode}
-            className={cn(
-              "px-4 py-2 border-2 border-brand-ink font-mono text-[11px] font-bold tracking-widest uppercase transition-all shadow-[4px_4px_0_0_#121212] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_0_#121212]",
-              writeEnabled ? "bg-red-500 text-white" : "bg-white text-brand-ink"
-            )}
-          >
-            {writeEnabled ? 'MUTATION_WRITE_ENABLED' : 'MODE_READ_ONLY'}
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center border-2 border-brand-ink bg-gray-50 h-10 shadow-[4px_4px_0_0_#D1D1D1]">
+              <button 
+                onClick={undo}
+                disabled={!canUndo}
+                className="px-3 border-r border-brand-ink hover:bg-brand-accent hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-inherit transition-colors"
+                title="Undo (Prev State)"
+              >
+                <Undo2 size={16} />
+              </button>
+              <button 
+                onClick={redo}
+                disabled={!canRedo}
+                className="px-3 hover:bg-brand-accent hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-inherit transition-colors"
+                title="Redo (Next State)"
+              >
+                <Redo2 size={16} />
+              </button>
+            </div>
+
+            <button 
+              onClick={toggleWriteMode}
+              className={cn(
+                "px-4 py-2 border-2 border-brand-ink font-mono text-[11px] font-bold tracking-widest uppercase transition-all shadow-[4px_4px_0_0_#121212] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_0_#121212]",
+                writeEnabled ? "bg-red-500 text-white" : "bg-white text-brand-ink"
+              )}
+            >
+              {writeEnabled ? 'MUTATION_WRITE_ENABLED' : 'MODE_READ_ONLY'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -564,11 +565,36 @@ export default function App() {
                     </div>
 
                     <div className="space-y-12">
-                      {executionResult.length > 0 ? executionResult.map((res, i) => (
-                        <ProjectionRenderer key={i} result={res} />
-                      )) : (
+                      {executionResult.length > 0 ? (
+                        <div className="space-y-12">
+                          {executionResult.map((res, i) => (
+                            <ProjectionRenderer key={i} result={res} />
+                          ))}
+                        </div>
+                      ) : (
                         <div className="py-20 border-2 border-dashed border-brand-line flex flex-col items-center justify-center text-gray-300 italic font-serif">
                           No experimental data collected yet.
+                        </div>
+                      )}
+
+                      {/* Input Mutations (Forms) inferred from jdCard */}
+                      {jdCard && jdCard.execution.nodes.filter(n => !n.capability.isRead).length > 0 && (
+                        <div className="space-y-8 pt-12 border-t-2 border-brand-line border-dashed">
+                          <div className="flex items-center gap-2">
+                            <Shield className="text-red-500" size={16} />
+                            <span className="mono-label text-red-500">Inferred Input Mutations</span>
+                          </div>
+                          {jdCard.execution.nodes.filter(n => !n.capability.isRead).map((node, i) => (
+                            <SchemaForm 
+                              key={i}
+                              title={node.capability.summary || `Update ${node.capability.path}`}
+                              schema={node.capability.inputSchema || { type: 'object', properties: {} }}
+                              onSubmit={(formData) => {
+                                console.log(`Executing mutation on ${node.capability.path}`, formData);
+                                addToast(`Transaction Queued: ${node.capability.operationId}`, "info");
+                              }}
+                            />
+                          ))}
                         </div>
                       )}
                     </div>
@@ -694,6 +720,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <Toasts toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }
