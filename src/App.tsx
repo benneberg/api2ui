@@ -25,13 +25,21 @@ import {
   FileJson,
   Undo2,
   Redo2,
-  AlertCircle
+  AlertCircle,
+  Library,
+  Plus,
+  Trash2,
+  X,
+  ExternalLink,
+  Save
 } from 'lucide-react';
 import { openApiService } from './services/openapiService';
 import { geminiService } from './services/geminiService';
 import { compilerService } from './services/compilerService';
+import { projectService } from './services/projectService';
+import { exportService } from './services/exportService';
 import { validateJdCard } from './services/validationService';
-import { type Capability, type Intent, type jdCard, type ViewType } from './types';
+import { type Capability, type Intent, type jdCard, type ViewType, type Project } from './types';
 import { cn } from './lib/utils';
 import { Toasts, type Toast } from './components/Toasts';
 import { useHistory } from './hooks/useHistory';
@@ -46,6 +54,11 @@ export default function App() {
   const [intent, setIntent] = useState<Intent | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   
+  // Project Management
+  const [projectName, setProjectName] = useState('Untitled Project');
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  
   // History controlled jdCard
   const { 
     current: jdCard, 
@@ -53,8 +66,42 @@ export default function App() {
     undo, 
     redo, 
     canUndo, 
-    canRedo 
+    canRedo,
+    history,
+    index
   } = useHistory<jdCard | null>(null);
+
+  useEffect(() => {
+    setProjects(projectService.getAllProjects());
+  }, []);
+
+  const handleNewProject = () => {
+    setProjectName('Untitled Project');
+    setJobDescription('');
+    setIntent(null);
+    setCapabilities([]);
+    pushToHistory(null);
+    setActiveView('spec');
+    addToast("New Project Workspace Initialized", "info");
+  };
+
+  const handleSaveProject = () => {
+    const saved = projectService.saveProject(projectName, jdCard);
+    setProjects(projectService.getAllProjects());
+    addToast(`Project "${projectName}" Persisted`, "success");
+  };
+
+  const loadProject = (p: Project) => {
+    setProjectName(p.name);
+    if (p.jdCard) {
+      setIntent(p.jdCard.intent);
+      setSpecUrl(p.jdCard.metadata.specUrl);
+      pushToHistory(p.jdCard);
+    }
+    setLibraryOpen(false);
+    setActiveView('preview');
+    addToast(`Loaded ${p.name}`, "info");
+  };
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const addToast = useCallback((message: string, type: Toast['type'] = 'info', details?: string[]) => {
@@ -153,19 +200,6 @@ export default function App() {
     setActiveView('lab');
   };
 
-  const exportJdCard = () => {
-    if (!jdCard) return;
-    const blob = new Blob([JSON.stringify(jdCard, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `jdcard-${new Date().getTime()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const runMockExecution = async () => {
     if (!jdCard) return;
     setIsExecuting(true);
@@ -221,25 +255,41 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-brand-bg text-brand-ink font-sans selection:bg-brand-accent selection:text-white">
+    <div className="min-h-screen bg-brand-bg text-brand-ink font-sans selection:bg-brand-accent selection:text-white overflow-x-hidden">
       {/* Header */}
-      <header className="border-b border-brand-ink bg-white">
-        <div className="max-w-5xl mx-auto px-6 h-20 flex items-center justify-between">
+      <header className="border-b border-brand-ink bg-white sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setLibraryOpen(true)}
+              className="p-2 border-2 border-brand-ink bg-gray-50 hover:bg-brand-ink hover:text-white transition-all shadow-[2px_2px_0_0_#121212]"
+            >
+              <Library size={20} />
+            </button>
             <div className="w-10 h-10 border-2 border-brand-ink flex items-center justify-center bg-brand-accent text-white shadow-[4px_4px_0_0_#121212]">
               <Code2 size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tighter uppercase">API2UI Studio</h1>
+              <input 
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="text-xl font-bold tracking-tighter uppercase focus:outline-none bg-transparent w-full md:w-auto"
+              />
               <div className="flex items-center gap-2">
-                <span className="mono-label">Orchestration Engine</span>
-                <span className="text-[10px] bg-brand-ink text-white px-1.5 py-0.5 rounded-sm font-mono">v2.1</span>
+                <span className="mono-label">Project Status: {jdCard ? 'COMPILED' : 'DRAFT'}</span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center border-2 border-brand-ink bg-gray-50 h-10 shadow-[4px_4px_0_0_#D1D1D1]">
+            <button 
+              onClick={handleSaveProject}
+              className="px-3 py-2 border-2 border-brand-ink bg-white font-mono text-[10px] font-bold tracking-widest uppercase transition-all shadow-[2px_2px_0_0_#121212] flex items-center gap-2"
+            >
+              <Save size={14} />
+              Save
+            </button>
+            <div className="hidden md:flex items-center border-2 border-brand-ink bg-gray-50 h-10 shadow-[4px_4px_0_0_#D1D1D1]">
               <button 
                 onClick={undo}
                 disabled={!canUndo}
@@ -270,6 +320,69 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Slide-out Library */}
+      <AnimatePresence>
+        {libraryOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setLibraryOpen(false)}
+              className="fixed inset-0 bg-brand-ink/60 backdrop-blur-sm z-[60]"
+            />
+            <motion.aside 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-full max-w-sm bg-white border-r-4 border-brand-ink z-[70] p-8 shadow-2xl flex flex-col"
+            >
+              <div className="flex items-center justify-between mb-12">
+                <h2 className="font-serif italic text-3xl">Library</h2>
+                <button onClick={() => setLibraryOpen(false)} className="p-2 hover:bg-gray-100"><X size={24} /></button>
+              </div>
+
+              <button 
+                onClick={handleNewProject}
+                className="w-full border-2 border-brand-ink py-4 mb-8 font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand-accent hover:text-white transition-all shadow-[4px_4px_0_0_#121212]"
+              >
+                <Plus size={18} />
+                New Project
+              </button>
+
+              <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar">
+                <span className="mono-label">Local Snapshots</span>
+                {projects.map(p => (
+                  <div key={p.id} className="group relative border-2 border-brand-line p-4 hover:border-brand-ink transition-all">
+                    <button 
+                      onClick={() => loadProject(p)}
+                      className="w-full text-left"
+                    >
+                      <h4 className="font-bold uppercase tracking-tight text-sm mb-1">{p.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <span className="mono-label text-[9px]">{new Date(p.updatedAt).toLocaleDateString()}</span>
+                        <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                        <span className="mono-label text-[9px]">{p.jdCard?.execution.nodes.length || 0} Nodes</span>
+                      </div>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        projectService.deleteProject(p.id);
+                        setProjects(projectService.getAllProjects());
+                      }}
+                      className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       <main className="max-w-5xl mx-auto px-6 py-12">
         {/* Navigation Stepper - Vertical Rule Style */}
@@ -602,7 +715,7 @@ export default function App() {
 
                   {jdCard && (
                     <div className="bg-[#121212] border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#121212] mt-8">
-                      <div className="flex items-center justify-between mb-6">
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
                         <div className="flex items-center gap-3">
                           <FileJson className="text-brand-accent" size={24} />
                           <div>
@@ -613,15 +726,24 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-                        <button 
-                          onClick={exportJdCard}
-                          className="flex items-center gap-2 bg-brand-accent text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest hover:bg-white hover:text-brand-ink transition-all active:translate-y-0.5"
-                        >
-                          <Download size={14} />
-                          Download .JSON
-                        </button>
+                        <div className="flex items-center gap-3 w-full md:w-auto">
+                          <button 
+                            onClick={() => exportService.downloadAsJson(jdCard)}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-transparent border border-white/20 text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest hover:bg-white hover:text-brand-ink transition-all active:translate-y-0.5"
+                          >
+                            <FileJson size={14} />
+                            Raw JSON
+                          </button>
+                          <button 
+                            onClick={() => exportService.downloadAsHtml(jdCard)}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-accent text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest hover:bg-white hover:text-brand-ink transition-all active:translate-y-0.5"
+                          >
+                            <ExternalLink size={14} />
+                            HTML Bundle
+                          </button>
+                        </div>
                       </div>
-                      <div className="bg-white/5 p-4 overflow-auto max-h-[300px]">
+                      <div className="bg-white/5 p-4 overflow-auto max-h-[300px] no-scrollbar">
                         <pre className="text-[10px] font-mono text-gray-400">
                           {JSON.stringify(jdCard, null, 2)}
                         </pre>

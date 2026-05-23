@@ -48,4 +48,11 @@ export interface jdCard {
   };
 }
 
-export type ViewType = 'spec' | 'intent' | 'plan' | 'lab' | 'preview';
+export type ViewType = 'spec' | 'intent' | 'plan' | 'lab' | 'preview' | 'library';
+
+export interface Project {
+  id: string;
+  name: string;
+  jdCard: jdCard | null;
+  updatedAt: string;
+}
