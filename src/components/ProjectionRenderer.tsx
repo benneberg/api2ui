@@ -31,7 +31,6 @@ export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
   const endpoint = result.endpoint;
   
   // 1. CHART INFERENCE
-  // If data is an array of objects and has numeric fields, try to suggest a chart
   const isChartable = Array.isArray(data) && data.length > 0;
   const numericKeys = isChartable ? Object.keys(data[0]).filter(k => typeof data[0][k] === 'number') : [];
   const stringKeys = isChartable ? Object.keys(data[0]).filter(k => typeof data[0][k] === 'string') : [];
@@ -40,21 +39,23 @@ export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
     if (!Array.isArray(data) || data.length === 0) return null;
     const columns = Object.keys(data[0]);
     return (
-      <div className="overflow-x-auto">
-        <table className="w-full border-2 border-brand-ink text-[11px] font-mono">
+      <div className="overflow-x-auto rounded-lg border-2 border-brand-ink bg-white shadow-[4px_4px_0_0_#121212]">
+        <table className="w-full text-[11px] font-mono border-collapse">
           <thead>
             <tr className="bg-brand-ink text-white uppercase tracking-wider italic">
               {columns.map((h) => (
-                <th key={h} className="p-3 text-left border-r border-white/20 last:border-0">{h}</th>
+                <th key={h} className="p-3 text-left border-r border-white/10 last:border-0">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-brand-ink">
+          <tbody className="divide-y-2 divide-brand-ink/10">
             {data.map((row: any, idx: number) => (
-              <tr key={idx} className="hover:bg-brand-accent/5 transition-colors">
+              <tr key={idx} className="hover:bg-gray-50 transition-colors">
                 {columns.map((col, j) => (
-                  <td key={j} className="p-3 border-r border-brand-line last:border-0 truncate font-medium">
-                    {typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col])}
+                  <td key={j} className="p-3 border-r border-brand-ink/10 last:border-0 truncate font-medium">
+                    {typeof row[col] === 'object' ? 
+                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1">MODAL_DATA</span> : 
+                      String(row[col])}
                   </td>
                 ))}
               </tr>
@@ -70,7 +71,7 @@ export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
     const xAxis = stringKeys[0];
     const yAxis = numericKeys[0];
     return (
-      <div className="h-[300px] border-2 border-brand-ink bg-white p-4">
+      <div className="h-[240px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ReBarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#D1D1D1" />
@@ -104,7 +105,7 @@ export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
     const xAxis = stringKeys[0];
     const yAxis = numericKeys[0];
     return (
-      <div className="h-[300px] border-2 border-brand-ink bg-white p-4">
+      <div className="h-[240px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ReLineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#D1D1D1" />
@@ -135,26 +136,49 @@ export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
 
   if (isChartable) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3 border-b-2 border-brand-ink pb-2">
-          <TableIcon size={18} />
-          <span className="font-mono text-xs font-bold uppercase">{endpoint}</span>
-          <span className="ml-auto mono-label text-brand-accent">COMPOSITE_VIEW</span>
+      <div className="space-y-8 bg-gray-50 border-2 border-brand-ink p-8 rounded-xl shadow-[8px_8px_0_0_#D1D1D1]">
+        <div className="flex items-center justify-between border-b-2 border-brand-ink pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-brand-ink text-white rounded-md">
+              <TableIcon size={20} />
+            </div>
+            <div>
+              <span className="font-mono text-[10px] text-gray-400 block uppercase tracking-widest">Active Projection Source</span>
+              <span className="font-bold text-lg tracking-tighter uppercase">{endpoint}</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="mono-label text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-sm">COMPOSITE_GRAPH_VIEW</span>
+            <span className="text-[9px] font-mono text-gray-400 mt-1 uppercase">Sample Size: {data.length}</span>
+          </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <span className="mono-label flex items-center gap-2"><BarChart size={12} /> Temporal / Distribution Bar</span>
-            {renderBarChart()}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-2">
+              <BarChart size={14} className="text-brand-accent" />
+              <span className="mono-label text-xs">Distribution_Analysis</span>
+            </div>
+            <div className="bg-white rounded-lg border-2 border-brand-ink p-4 shadow-[4px_4px_0_0_#121212]">
+              {renderBarChart()}
+            </div>
           </div>
-          <div className="space-y-2">
-            <span className="mono-label flex items-center gap-2"><LineChart size={12} /> Trend Analysis</span>
-            {renderLineChart()}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-2">
+              <LineChart size={14} className="text-brand-accent" />
+              <span className="mono-label text-xs">Chronological_Trend</span>
+            </div>
+            <div className="bg-white rounded-lg border-2 border-brand-ink p-4 shadow-[4px_4px_0_0_#121212]">
+              {renderLineChart()}
+            </div>
           </div>
         </div>
         
-        <div className="space-y-2">
-          <span className="mono-label flex items-center gap-2"><TableIcon size={12} /> Raw Schema Surface</span>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-2">
+            <TableIcon size={14} className="text-brand-accent" />
+            <span className="mono-label text-xs">Full_Relational_Surface</span>
+          </div>
           {renderTable()}
         </div>
       </div>
@@ -163,14 +187,21 @@ export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
 
   // Fallback / Single Object
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 border-b-2 border-brand-ink pb-2">
-        <Play size={18} />
-        <span className="font-mono text-xs font-bold uppercase">{endpoint}</span>
-        <span className="ml-auto mono-label text-brand-accent">SINGLE_OBJECT_PROJECTION</span>
+    <div className="space-y-6 bg-white border-2 border-brand-ink p-8 rounded-xl shadow-[8px_8px_0_0_#D1D1D1]">
+      <div className="flex items-center justify-between border-b-2 border-brand-ink pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-brand-ink text-white rounded-md">
+            <Play size={20} />
+          </div>
+          <div>
+            <span className="font-mono text-[10px] text-gray-400 block uppercase tracking-widest">Discrete Projection</span>
+            <span className="font-bold text-lg tracking-tighter uppercase">{endpoint}</span>
+          </div>
+        </div>
+        <span className="mono-label text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-sm">OBJECT_SCHEMA_MAP</span>
       </div>
-      <div className="bg-white border-2 border-brand-ink p-6 font-mono text-xs shadow-[4px_4px_0_0_#D1D1D1]">
-        <pre className="overflow-auto">{JSON.stringify(data, null, 2)}</pre>
+      <div className="bg-gray-50 border-2 border-brand-ink p-6 font-mono text-[11px] rounded-lg shadow-inner overflow-x-auto">
+        <pre className="text-gray-700">{JSON.stringify(data, null, 2)}</pre>
       </div>
     </div>
   );
@@ -252,19 +283,20 @@ export const SchemaForm = ({ schema, onSubmit, title }: { schema: any, onSubmit:
 
     // Default Text/Number Input
     return (
-      <div className="space-y-1">
-        <label className="mono-label text-[10px] flex items-center gap-1">
+      <div className="space-y-1.5">
+        <label className="mono-label text-[10px] flex items-center gap-2">
+          <div className="w-1 h-3 bg-brand-accent rounded-full" />
           {name} {isRequired && <span className="text-red-500">*</span>}
         </label>
         <input 
           type={fieldSchema.type === 'number' ? 'number' : 'text'}
           value={formData[name] || ''}
           onChange={(e) => setFormData({ ...formData, [name]: e.target.value })}
-          className="w-full border-2 border-brand-ink p-2 font-mono text-xs bg-white focus:outline-none placeholder:text-gray-300"
-          placeholder={`Enter ${name}`}
+          className="w-full border-2 border-brand-ink p-3 font-mono text-xs bg-gray-50/50 focus:bg-white focus:outline-none placeholder:text-gray-300 rounded-md transition-all focus:shadow-[4px_4px_0_0_#121212]"
+          placeholder={`INPUT_${name.toUpperCase()}`}
         />
         {fieldSchema.description && (
-          <p className="text-[9px] text-gray-400 font-serif italic">{fieldSchema.description}</p>
+          <p className="text-[9px] text-gray-400 font-serif italic pl-3">{fieldSchema.description}</p>
         )}
       </div>
     );
@@ -273,26 +305,40 @@ export const SchemaForm = ({ schema, onSubmit, title }: { schema: any, onSubmit:
   const properties = schema.properties || {};
 
   return (
-    <div className="bg-white border-2 border-brand-ink p-6 shadow-[8px_8px_0_0_#D1D1D1] space-y-6">
-      <div className="flex items-center gap-3 border-b-2 border-brand-line pb-2">
-        <FileText size={18} />
-        <h3 className="font-serif italic text-xl">{title}</h3>
+    <div className="bg-white border-2 border-brand-ink p-8 rounded-2xl shadow-[12px_12px_0_0_#D1D1D1] space-y-8">
+      <div className="flex items-center justify-between border-b-2 border-brand-ink pb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-brand-accent text-white flex items-center justify-center rounded-xl shadow-[4px_4px_0_0_#121212]">
+            <FileText size={24} />
+          </div>
+          <div>
+            <h3 className="font-serif italic text-3xl text-brand-ink">{title}</h3>
+            <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Dynamic_State_Mutation_Panel</p>
+          </div>
+        </div>
+        <div className="hidden sm:block px-3 py-1 bg-gray-100 border border-gray-200 rounded-full font-mono text-[8px] text-gray-400">
+          PROJECTION_ID: {Math.random().toString(36).substring(7).toUpperCase()}
+        </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {Object.entries(properties).map(([name, fSchema]) => (
-          <div key={name}>
+          <div key={name} className="group transition-all">
             {renderField(name, fSchema)}
           </div>
         ))}
       </div>
 
-      <button 
-        onClick={() => onSubmit(formData)}
-        className="w-full bg-brand-ink text-white font-bold py-3 uppercase tracking-widest hover:bg-brand-accent transition-all active:translate-y-1 active:shadow-none shadow-[4px_4px_0_0_#121212]"
-      >
-        Execute Data Transaction
-      </button>
+      <div className="pt-6 border-t-2 border-brand-line border-dashed">
+        <button 
+          onClick={() => onSubmit(formData)}
+          className="w-full bg-brand-ink text-white font-bold py-5 uppercase tracking-[0.2em] text-xs hover:bg-brand-accent transition-all active:translate-y-1 active:shadow-none shadow-[6px_6px_0_0_#121212] flex items-center justify-center gap-3 rounded-lg"
+        >
+          <Zap size={16} />
+          Commit Execution Payload
+        </button>
+        <p className="text-center mt-4 font-mono text-[9px] text-gray-400 italic">Caution: Live mutations will modify persistent state on the target host.</p>
+      </div>
     </div>
   );
 };

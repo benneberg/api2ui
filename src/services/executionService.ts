@@ -1,4 +1,5 @@
 import { type jdCard } from "../types";
+import { mockDataService } from "./mockDataService";
 
 export const executionService = {
   async executeNode(node: any, writeEnabled: boolean): Promise<any> {
@@ -22,12 +23,24 @@ export const executionService = {
         })
       });
 
+      const contentType = response.headers.get('content-type');
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `HTTP ${response.status} from ${node.capability.path}`);
+        let errorData;
+        if (contentType?.includes('application/json')) {
+          errorData = await response.json();
+        } else {
+          errorData = { error: await response.text() };
+        }
+        throw new Error(errorData.error || `HTTP ${response.status} from ${url}`);
       }
 
-      return await response.json();
+      if (contentType?.includes('application/json')) {
+        return await response.json();
+      } else {
+        const text = await response.text();
+        // Try to see if it's text that looks like a message
+        return { message: text };
+      }
     } catch (err: any) {
       console.error("Execution Error:", err);
       throw err;
@@ -37,11 +50,23 @@ export const executionService = {
   resolveUrlAndMethod(node: any) {
     let url = node.capability.path;
     const method = node.capability.method;
+    const params = { ...(node.input || {}), ...(node.bindings || {}) };
 
-    // Relative URLs should be resolved against the spec URL if possible
-    // For now, we'll assume the URL is absolute or the proxy handles it
-    // Actually, common Specs use relative paths. 
-    // We should probably check the base URL if available in metadata.
+    // Resolve path parameters: /user/{username} -> /user/ben
+    if (url.includes('{')) {
+      const pathParams = url.match(/\{([^}]+)\}/g);
+      pathParams?.forEach(placeholder => {
+        const key = placeholder.replace(/[{}]/g, '');
+        if (params[key]) {
+          url = url.replace(placeholder, String(params[key]));
+        } else {
+          // Fallback to mock value if missing
+          const paramSchema = node.capability.inputSchema?.properties?.[key] || { type: 'string' };
+          const mockVal = mockDataService.generateObject(paramSchema);
+          url = url.replace(placeholder, String(mockVal));
+        }
+      });
+    }
     
     return { url, method };
   }

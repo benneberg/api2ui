@@ -31,20 +31,26 @@ import {
   Trash2,
   X,
   ExternalLink,
-  Save
+  Save,
+  Activity,
+  Cpu,
+  Globe,
+  Zap,
+  Layout
 } from 'lucide-react';
 import { openApiService } from './services/openapiService';
-import { geminiService } from './services/geminiService';
+import { inferenceService } from './services/geminiService';
 import { compilerService } from './services/compilerService';
 import { projectService } from './services/projectService';
 import { exportService } from './services/exportService';
 import { validateJdCard } from './services/validationService';
-import { type Capability, type Intent, type jdCard, type ViewType, type Project } from './types';
+import { type Capability, type Intent, type jdCard, type ViewType, type Project, type AIProvider } from './types';
 import { cn } from './lib/utils';
 import { Toasts, type Toast } from './components/Toasts';
 import { useHistory } from './hooks/useHistory';
 import { ProjectionRenderer, SchemaForm } from './components/ProjectionRenderer';
 import { FlowVisualizer } from './components/FlowVisualizer';
+import { TestStage } from './components/TestStage';
 import { mockDataService } from './services/mockDataService';
 import { executionService } from './services/executionService';
 
@@ -134,6 +140,9 @@ export default function App() {
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [llmModel, setLlmModel] = useState('gemini-1.5-flash');
+  const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [customApiKey, setCustomApiKey] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -172,12 +181,33 @@ export default function App() {
     setShowWriteConfirm(false);
   };
 
+  useEffect(() => {
+    const fetchModels = async () => {
+      setIsLoadingModels(true);
+      try {
+        const models = await inferenceService.fetchModels(aiProvider);
+        setAvailableModels(models);
+        if (models.length > 0) {
+          // Keep current model if it exists in new list, else pick first
+          if (!models.find(m => m.id === llmModel)) {
+            setLlmModel(models[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch models", err);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+    fetchModels();
+  }, [aiProvider]);
+
   const handleExtractIntent = async () => {
     if (!jobDescription) return;
     setIsExtracting(true);
     setError(null);
     try {
-      const extractedIntent = await geminiService.extractIntent(jobDescription, capabilities, llmModel, customApiKey);
+      const extractedIntent = await inferenceService.extractIntent(jobDescription, capabilities, aiProvider, llmModel, customApiKey);
       setIntent(extractedIntent);
       addToast("Intent Decoded Successfully", "success");
       setActiveView('plan');
@@ -205,7 +235,7 @@ export default function App() {
 
     pushToHistory(compiled);
     addToast("jdCard Artifact Compiled & Validated", "success");
-    setActiveView('lab');
+    setActiveView('test');
   };
 
   const runExecution = async () => {
@@ -242,10 +272,14 @@ export default function App() {
         };
         
         results.push(res);
-        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_COMPLETE: ${node.id} -> ${isRealExecution ? 'RESOLVED_FROM_HOST' : 'RESOLVED_WITH_SCHEMA_HINTS'}`]);
+        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ NODE_RESOLVED: ${node.id}`]);
       } catch (err: any) {
-        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_FAULT: ${err.message}`]);
-        if (isRealExecution) break; // Halting on real errors
+        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ NODE_FAULT: ${node.id}`]);
+        setExecutionLogs(prev => [...prev, `    > CAUSE: ${err.message}`]);
+        if (isRealExecution) {
+          setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ⏹ HALTING_EXECUTION: Real-world fault detected.`]);
+          break; 
+        }
       }
       
       await new Promise(resolve => setTimeout(resolve, 400));
@@ -264,6 +298,7 @@ export default function App() {
     { id: 'spec', label: 'Ingest', icon: Database },
     { id: 'intent', label: 'Intent', icon: Target },
     { id: 'plan', label: 'Compile', icon: Settings2 },
+    { id: 'test', label: 'Test', icon: Activity },
     { id: 'lab', label: 'Lab', icon: Play },
     { id: 'preview', label: 'Preview', icon: Eye },
   ];
@@ -271,26 +306,27 @@ export default function App() {
   return (
     <div className="min-h-screen bg-brand-bg text-brand-ink font-sans selection:bg-brand-accent selection:text-white overflow-x-hidden">
       {/* Header */}
-      <header className="border-b border-brand-ink bg-white sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <header className="border-b-2 border-brand-ink bg-white sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-6">
             <button 
               onClick={() => setLibraryOpen(true)}
-              className="p-2 border-2 border-brand-ink bg-gray-50 hover:bg-brand-ink hover:text-white transition-all shadow-[2px_2px_0_0_#121212]"
+              className="p-2.5 border-2 border-brand-ink bg-gray-50 hover:bg-brand-ink hover:text-white transition-all shadow-[4px_4px_0_0_#121212]"
             >
               <Library size={20} />
             </button>
-            <div className="w-10 h-10 border-2 border-brand-ink flex items-center justify-center bg-brand-accent text-white shadow-[4px_4px_0_0_#121212]">
-              <Code2 size={24} />
+            <div className="w-12 h-12 border-2 border-brand-ink flex items-center justify-center bg-brand-ink text-white shadow-[4px_4px_0_0_#D1D1D1] rounded-lg">
+              <Cpu size={26} />
             </div>
-            <div>
+            <div className="hidden sm:block">
               <input 
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                className="text-xl font-bold tracking-tighter uppercase focus:outline-none bg-transparent w-full md:w-auto"
+                className="text-2xl font-serif italic tracking-tighter text-brand-ink focus:outline-none bg-transparent w-full md:w-auto"
               />
               <div className="flex items-center gap-2">
-                <span className="mono-label">Project Status: {jdCard ? 'COMPILED' : 'DRAFT'}</span>
+                <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", jdCard ? "bg-green-500" : "bg-orange-400")} />
+                <span className="mono-label text-[9px]">ENGINE_STATUS: {jdCard ? 'ARTIFACT_COMPILED' : 'DRAFT_SPEC'}</span>
               </div>
             </div>
           </div>
@@ -539,36 +575,66 @@ export default function App() {
                           </button>
                         ))}
                       </div>
+                    </div>                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="technical-grid">
+                        <div className="p-3 bg-gray-50 flex items-center justify-between border-b border-brand-line">
+                          <div className="flex items-center gap-2">
+                            <Cpu size={14} />
+                            <span className="mono-label">AI Engine Provider</span>
+                          </div>
+                        </div>
+                        <div className="flex p-1 bg-white">
+                          {(['gemini', 'openrouter', 'groq'] as AIProvider[]).map(p => (
+                            <button
+                              key={p}
+                              onClick={() => setAiProvider(p)}
+                              className={cn(
+                                "flex-1 py-2 font-mono text-[10px] uppercase tracking-tighter transition-all",
+                                aiProvider === p ? "bg-brand-ink text-white font-bold" : "text-gray-400 hover:text-brand-ink hover:bg-gray-100"
+                              )}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="technical-grid">
+                        <div className="p-3 bg-gray-50 flex items-center gap-2 border-b border-brand-line">
+                          <Zap size={14} />
+                          <span className="mono-label">Preferred Model</span>
+                        </div>
+                        <div className="relative">
+                          <select 
+                            value={llmModel}
+                            onChange={(e) => setLlmModel(e.target.value)}
+                            disabled={isLoadingModels}
+                            className="w-full p-3 font-mono text-xs focus:outline-none bg-white appearance-none cursor-pointer"
+                          >
+                            {availableModels.map(m => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                          {isLoadingModels && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <RefreshCw size={12} className="animate-spin text-brand-accent" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="technical-grid">
-                        <div className="p-3 bg-gray-50 flex items-center gap-2 border-b border-brand-line">
-                          <Settings2 size={14} />
-                          <span className="mono-label">LLM Model</span>
-                        </div>
-                        <select 
-                          value={llmModel}
-                          onChange={(e) => setLlmModel(e.target.value)}
-                          className="w-full p-3 font-mono text-xs focus:outline-none bg-white"
-                        >
-                          <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                          <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                        </select>
+                    <div className="technical-grid">
+                      <div className="p-3 bg-gray-50 flex items-center gap-2 border-b border-brand-line">
+                        <Shield size={14} />
+                        <span className="mono-label">{aiProvider.toUpperCase()}_API_KEY (PERSISTED_SECURELY)</span>
                       </div>
-                      <div className="technical-grid">
-                        <div className="p-3 bg-gray-50 flex items-center gap-2 border-b border-brand-line">
-                          <Shield size={14} />
-                          <span className="mono-label">Override API Key</span>
-                        </div>
-                        <input 
-                          type="password"
-                          value={customApiKey}
-                          onChange={(e) => setCustomApiKey(e.target.value)}
-                          placeholder="OPTIONAL_KEY"
-                          className="w-full p-3 font-mono text-xs focus:outline-none bg-white"
-                        />
-                      </div>
+                      <input 
+                        type="password"
+                        value={customApiKey}
+                        onChange={(e) => setCustomApiKey(e.target.value)}
+                        placeholder={`INPUT_${aiProvider.toUpperCase()}_AUTHORIZATION_TOKEN`}
+                        className="w-full p-3 font-mono text-xs focus:outline-none bg-white"
+                      />
                     </div>
 
                     <div className="technical-grid">
@@ -631,6 +697,20 @@ export default function App() {
                       Assemble jdCard Artifact
                     </button>
                   </div>
+                </motion.div>
+              )}
+
+              {activeView === 'test' && (
+                <motion.div
+                  key="test"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <TestStage 
+                    capabilities={capabilities} 
+                    onComplete={() => setActiveView('lab')} 
+                  />
                 </motion.div>
               )}
 

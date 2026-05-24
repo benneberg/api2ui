@@ -43,8 +43,23 @@ export const FlowVisualizer = ({ jdCard }: FlowVisualizerProps) => {
   };
 
   return (
-    <div className="h-[120px] bg-white border-2 border-brand-ink p-4 relative overflow-hidden">
-      <div className="absolute top-2 left-4 mono-label opacity-30">EXECUTION_SEQUENCE_DAG</div>
+    <div className="h-[140px] bg-gray-50 border-2 border-brand-ink p-6 relative overflow-hidden rounded-xl shadow-[4px_4px_0_0_#121212]">
+      <div className="absolute top-3 left-4 flex items-center gap-2">
+        <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-pulse" />
+        <span className="mono-label text-[9px] tracking-[0.2em] uppercase">Structural_Graph_Topology</span>
+      </div>
+      
+      <div className="absolute top-3 right-4 flex gap-4">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 bg-blue-500 rounded-full" />
+          <span className="mono-label text-[8px]">READ</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 bg-red-500 rounded-full" />
+          <span className="mono-label text-[8px]">MUTATE</span>
+        </div>
+      </div>
+
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ top: 20, right: 40, bottom: 20, left: 40 }}>
           <XAxis type="number" dataKey="x" hide domain={['dataMin - 5', 'dataMax + 5']} />

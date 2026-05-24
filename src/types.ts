@@ -49,7 +49,17 @@ export interface jdCard {
   };
 }
 
-export type ViewType = 'spec' | 'intent' | 'plan' | 'lab' | 'preview' | 'library';
+export type ViewType = 'spec' | 'intent' | 'plan' | 'test' | 'lab' | 'preview' | 'library';
+
+export type AIProvider = 'gemini' | 'openrouter' | 'groq';
+
+export interface TestResult {
+  capabilityId: string;
+  status: 'SUCCESS' | 'FAILURE' | 'PENDING';
+  latency: number;
+  statusCode?: number;
+  error?: string;
+}
 
 export interface Project {
   id: string;

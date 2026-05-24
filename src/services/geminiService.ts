@@ -1,16 +1,22 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { type Capability, type Intent } from "../types";
+import { type Capability, type Intent, type AIProvider } from "../types";
 
-export class GeminiService {
-  async extractIntent(description: string, capabilities: Capability[], modelName: string = "gemini-1.5-flash", customApiKey?: string): Promise<Intent> {
-    const response = await fetch('/api/gemini/extract', {
+export class InferenceService {
+  async extractIntent(
+    description: string, 
+    capabilities: Capability[], 
+    provider: AIProvider = 'gemini',
+    modelName: string = "gemini-1.5-flash", 
+    customApiKey?: string
+  ): Promise<Intent> {
+    const response = await fetch('/api/ai/extract', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         description,
         capabilities,
         modelName,
-        customApiKey
+        customApiKey,
+        provider
       })
     });
 
@@ -21,6 +27,12 @@ export class GeminiService {
 
     return await response.json();
   }
+
+  async fetchModels(provider: AIProvider): Promise<any[]> {
+    const response = await fetch(`/api/ai/models/${provider}`);
+    if (!response.ok) return [];
+    return await response.json();
+  }
 }
 
-export const geminiService = new GeminiService();
+export const inferenceService = new InferenceService();
