@@ -144,6 +144,8 @@ export default function App() {
   const [executionResult, setExecutionResult] = useState<any[]>([]);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<Record<string, any[]>>({});
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [llmModel, setLlmModel] = useState('gemini-3.5-flash');
   const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
   const [availableModels, setAvailableModels] = useState<any[]>([]);
@@ -254,55 +256,79 @@ export default function App() {
     setIsExecuting(true);
     setExecutionLogs([]);
     setExecutionResult([]);
+    setCurrentStepIndex(0);
+    setSelectedRows({});
     
-    const results = [];
-    for (const node of jdCard.execution.nodes) {
-      const typeLabel = node.capability.isRead ? "READ" : "MUTATION";
-      const safetyStatus = node.capability.isRead || writeEnabled ? "SAFE" : "BLOCKED";
-      
-      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] INITIATING_NODE: ${node.id} (${typeLabel})`]);
-      await new Promise(resolve => setTimeout(resolve, isRealExecution ? 200 : 800));
-      
-      if (safetyStatus === "BLOCKED") {
-        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] FAULT: Node ${node.id} is a MUTATION and Write Session is DISABLED. Skipping.`]);
-        continue;
-      }
-      
-      try {
-        let data;
-        if (isRealExecution) {
-          data = await executionService.executeNode(node, writeEnabled);
-        } else {
-          data = mockDataService.generateFromSchema(node.capability.outputSchema);
-        }
-
-        const res = {
-          step: node.id,
-          endpoint: node.capability.path,
-          data
-        };
-        
-        results.push(res);
-        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ NODE_RESOLVED: ${node.id}`]);
-      } catch (err: any) {
-        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ NODE_FAULT: ${node.id}`]);
-        setExecutionLogs(prev => [...prev, `    > CAUSE: ${err.message}`]);
-        if (isRealExecution) {
-          setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ⏹ HALTING_EXECUTION: Real-world fault detected.`]);
-          break; 
-        }
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 400));
+    // Initial run only for the first step if it's a READ
+    const firstNode = jdCard.execution.nodes[0];
+    if (!firstNode) {
+      setIsExecuting(false);
+      return;
     }
 
-    setExecutionResult(results);
+    await executeStep(0);
     setIsExecuting(false);
-    setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] SEQUENCE_TERMINATED: READY_FOR_PROJECTION`]);
-    
-    setTimeout(() => {
-      setActiveView('preview');
-    }, 1000);
+    setActiveView('preview');
+  };
+
+  const executeStep = async (index: number, useSelection?: any[]) => {
+    if (!jdCard) return;
+    const node = jdCard.execution.nodes[index];
+    if (!node) return;
+
+    const results = [...executionResult];
+    const typeLabel = node.capability.isRead ? "READ" : "MUTATION";
+    const safetyStatus = node.capability.isRead || writeEnabled ? "SAFE" : "BLOCKED";
+
+    setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] INITIATING_NODE: ${node.id} (${typeLabel})`]);
+
+    if (safetyStatus === "BLOCKED") {
+      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] FAULT: Node ${node.id} is a MUTATION and Write Session is DISABLED. Skipping.`]);
+      return;
+    }
+
+    try {
+      let data;
+      if (useSelection && useSelection.length > 0) {
+        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] BATCH_EXECUTION: Running ${useSelection.length} cycles for ${node.id}`]);
+        const batchResults = [];
+        for (const item of useSelection) {
+          const itemNode = {
+            ...node,
+            input: { ...node.input, ...item }
+          };
+          const res = isRealExecution ? 
+            await executionService.executeNode(itemNode, writeEnabled) : 
+            mockDataService.generateFromSchema(node.capability.outputSchema);
+          batchResults.push(res);
+        }
+        data = batchResults;
+      } else {
+        data = isRealExecution ? 
+          await executionService.executeNode(node, writeEnabled) : 
+          mockDataService.generateFromSchema(node.capability.outputSchema);
+      }
+
+      const res = {
+        step: node.id,
+        endpoint: node.capability.path,
+        data
+      };
+      
+      const existingIdx = results.findIndex(r => r.step === node.id);
+      if (existingIdx >= 0) {
+        results[existingIdx] = res;
+      } else {
+        results.push(res);
+      }
+
+      setExecutionResult(results);
+      setCurrentStepIndex(index);
+      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ NODE_RESOLVED: ${node.id}`]);
+    } catch (err: any) {
+      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ NODE_FAULT: ${node.id}`]);
+      setExecutionLogs(prev => [...prev, `    > CAUSE: ${err.message}`]);
+    }
   };
 
   const navItems: { id: ViewType; label: string; icon: any }[] = [
@@ -946,14 +972,74 @@ export default function App() {
                         <h2 className="font-serif italic text-4xl mb-2">UI Projection</h2>
                         <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 05 // Schema Surface Interface</p>
                       </div>
-                      <div className="mono-label bg-gray-100 px-2 py-1">Active_Projectors: {executionResult.length}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="mono-label bg-gray-100 px-2 py-1">Nodes: {executionResult.length}</div>
+                        <div className="mono-label bg-brand-accent/10 text-brand-accent px-2 py-1">Interactive_Tool</div>
+                      </div>
                     </div>
 
                     <div className="space-y-12">
+                      {/* Configuration Panel */}
+                      <div className="bg-gray-50 border-2 border-brand-ink p-6 rounded-xl shadow-[4px_4px_0_0_#D1D1D1]">
+                        <div className="flex items-center gap-2 mb-6 border-b border-brand-line pb-3">
+                          <Settings2 size={16} />
+                          <h3 className="mono-label font-bold">Runtime Configuration</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1">
+                            <label className="mono-label text-[10px]">API_ENDPOINT_ROOT</label>
+                            <input 
+                              value={specUrl}
+                              onChange={(e) => setSpecUrl(e.target.value)}
+                              className="w-full bg-white border border-brand-line p-2 font-mono text-[10px] focus:border-brand-ink outline-none"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="mono-label text-[10px]">AUTH_TOKEN_BEARER</label>
+                            <input 
+                              type="password"
+                              value={customApiKey}
+                              onChange={(e) => setCustomApiKey(e.target.value)}
+                              className="w-full bg-white border border-brand-line p-2 font-mono text-[10px] focus:border-brand-ink outline-none"
+                              placeholder="••••••••••••••••"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
                       {executionResult.length > 0 ? (
                         <div className="space-y-12">
                           {executionResult.map((res, i) => (
-                            <ProjectionRenderer key={i} result={res} />
+                            <div key={res.step} className="space-y-6">
+                              <ProjectionRenderer 
+                                result={res} 
+                                onSelectionChange={(items) => setSelectedRows(prev => ({ ...prev, [res.step]: items }))}
+                                selectedItems={selectedRows[res.step]}
+                              />
+                              
+                              {/* Selection Action Rail */}
+                              {selectedRows[res.step]?.length > 0 && jdCard && jdCard.execution.nodes[currentStepIndex + 1] && (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="p-6 bg-brand-ink text-white shadow-[8px_8px_0_0_#D1D1D1] flex flex-col md:flex-row items-center justify-between gap-6"
+                                >
+                                  <div>
+                                    <div className="font-bold text-xl uppercase italic">Interaction Pipeline Primed</div>
+                                    <p className="font-mono text-[10px] text-gray-400 mt-1">
+                                      SELECTED: {selectedRows[res.step].length} ITEMS // TARGET_ACTION: {jdCard.execution.nodes[currentStepIndex + 1].capability.summary}
+                                    </p>
+                                  </div>
+                                  <button 
+                                    onClick={() => executeStep(currentStepIndex + 1, selectedRows[res.step])}
+                                    className="px-8 py-3 bg-brand-accent text-white font-bold uppercase tracking-widest text-xs hover:bg-white hover:text-brand-ink transition-all flex items-center gap-2"
+                                  >
+                                    Execute {jdCard.execution.nodes[currentStepIndex+1].id} for Selection
+                                    <ArrowRight size={14} />
+                                  </button>
+                                </motion.div>
+                              )}
+                            </div>
                           ))}
                         </div>
                       ) : (
@@ -962,16 +1048,16 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Input Mutations (Forms) inferred from jdCard */}
-                      {jdCard && jdCard.execution.nodes.filter(n => !n.capability.isRead).length > 0 && (
+                      {/* Manual Mutations for steps without direct pipeline links */}
+                      {jdCard && jdCard.execution.nodes.filter((n, i) => !n.capability.isRead && i > currentStepIndex).length > 0 && (
                         <div className="space-y-8 pt-12 border-t-2 border-brand-line border-dashed">
                           <div className="flex items-center gap-2">
                             <Shield className="text-red-500" size={16} />
-                            <span className="mono-label text-red-500">Inferred Input Mutations</span>
+                            <span className="mono-label text-red-500">Standalone State Mutations</span>
                           </div>
-                          {jdCard.execution.nodes.filter(n => !n.capability.isRead).map((node, i) => (
+                          {jdCard.execution.nodes.filter((n, i) => !n.capability.isRead && i > currentStepIndex).map((node, i) => (
                             <SchemaForm 
-                              key={i}
+                              key={node.id}
                               title={node.capability.summary || `Update ${node.capability.path}`}
                               schema={node.capability.inputSchema || { type: 'object', properties: {} }}
                               onSubmit={async (formData) => {
@@ -980,6 +1066,8 @@ export default function App() {
                                   try {
                                     await executionService.executeNode({...node, input: formData}, writeEnabled);
                                     addToast("Mutation Success", "success");
+                                    // Refresh the list if we just mutated something
+                                    if (currentStepIndex >= 0) executeStep(0);
                                   } catch (err: any) {
                                     addToast("Mutation Failed", "error", [err.message]);
                                   }

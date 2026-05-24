@@ -25,12 +25,34 @@ import { cn } from '../lib/utils';
 
 interface ProjectionRendererProps {
   result: any;
+  onSelectionChange?: (selectedItems: any[]) => void;
+  selectedItems?: any[];
 }
 
-export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
+export const ProjectionRenderer = ({ result, onSelectionChange, selectedItems = [] }: ProjectionRendererProps) => {
   const data = result.data;
   const endpoint = result.endpoint;
   
+  const [localSelection, setLocalSelection] = React.useState<any[]>(selectedItems);
+
+  const handleToggleRow = (row: any) => {
+    const isSelected = localSelection.some(item => JSON.stringify(item) === JSON.stringify(row));
+    let nextSelection;
+    if (isSelected) {
+      nextSelection = localSelection.filter(item => JSON.stringify(item) !== JSON.stringify(row));
+    } else {
+      nextSelection = [...localSelection, row];
+    }
+    setLocalSelection(nextSelection);
+    onSelectionChange?.(nextSelection);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    const nextSelection = checked ? (Array.isArray(data) ? data : []) : [];
+    setLocalSelection(nextSelection);
+    onSelectionChange?.(nextSelection);
+  };
+
   // 1. CHART INFERENCE
   const isChartable = Array.isArray(data) && data.length > 0;
   const numericKeys = isChartable ? Object.keys(data[0]).filter(k => typeof data[0][k] === 'number') : [];
@@ -39,28 +61,49 @@ export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
   const renderTable = () => {
     if (!Array.isArray(data) || data.length === 0) return null;
     const columns = Object.keys(data[0]);
+    const allSelected = localSelection.length === data.length && data.length > 0;
+
     return (
       <div className="overflow-x-auto rounded-lg border-2 border-brand-ink bg-white shadow-[4px_4px_0_0_#121212]">
         <table className="w-full text-[11px] font-mono border-collapse">
           <thead>
             <tr className="bg-brand-ink text-white uppercase tracking-wider italic">
+              <th className="p-3 w-10 border-r border-white/10">
+                <input 
+                  type="checkbox" 
+                  checked={allSelected}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="accent-brand-accent"
+                />
+              </th>
               {columns.map((h) => (
                 <th key={h} className="p-3 text-left border-r border-white/10 last:border-0">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y-2 divide-brand-ink/10">
-            {data.map((row: any, idx: number) => (
-              <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                {columns.map((col, j) => (
-                  <td key={j} className="p-3 border-r border-brand-ink/10 last:border-0 truncate font-medium">
-                    {typeof row[col] === 'object' ? 
-                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1">MODAL_DATA</span> : 
-                      String(row[col])}
+            {data.map((row: any, idx: number) => {
+              const isSelected = localSelection.some(item => JSON.stringify(item) === JSON.stringify(row));
+              return (
+                <tr key={idx} className={cn("transition-colors cursor-pointer", isSelected ? "bg-brand-accent/5 hover:bg-brand-accent/10" : "hover:bg-gray-50")} onClick={() => handleToggleRow(row)}>
+                  <td className="p-3 border-r border-brand-ink/10 text-center" onClick={(e) => e.stopPropagation()}>
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={() => handleToggleRow(row)}
+                      className="accent-brand-accent"
+                    />
                   </td>
-                ))}
-              </tr>
-            ))}
+                  {columns.map((col, j) => (
+                    <td key={j} className="p-3 border-r border-brand-ink/10 last:border-0 truncate font-medium">
+                      {typeof row[col] === 'object' ? 
+                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1">NESTED_DATA</span> : 
+                        String(row[col])}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
