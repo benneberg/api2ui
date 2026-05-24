@@ -26,7 +26,7 @@ interface ProjectionRendererProps {
   result: any;
 }
 
-export const ProjectionRenderer = ({ result }: { result: any }) => {
+export const ProjectionRenderer = ({ result }: { result: any, key?: any }) => {
   const data = result.data;
   const endpoint = result.endpoint;
   
@@ -183,7 +183,7 @@ interface SchemaFormProps {
   title: string;
 }
 
-export const SchemaForm = ({ schema, onSubmit, title }: { schema: any, onSubmit: (data: any) => void, title: string }) => {
+export const SchemaForm = ({ schema, onSubmit, title }: { schema: any, onSubmit: (data: any) => void, title: string, key?: any }) => {
   const [formData, setFormData] = React.useState<any>({});
 
   const renderField = (name: string, fieldSchema: any) => {

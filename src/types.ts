@@ -7,6 +7,7 @@ export interface Capability {
   operationId?: string;
   inputSchema?: any;
   outputSchema?: any;
+  safetyClassification: 'READ_ONLY' | 'MUTATES_DATA' | 'REQUIRES_AUTH';
 }
 
 export interface Intent {

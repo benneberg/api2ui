@@ -52,15 +52,21 @@ export class OpenApiService {
         // Repair: Generate operationId if missing
         const operationId = typedDetails.operationId || `${method}_${path.replace(/[^a-zA-Z0-9]/g, '_')}`;
         
+        // Safety Classification Logic
+        const hasAuth = !!(typedDetails.security || spec.security);
+        let safetyClassification: Capability['safetyClassification'] = isRead ? 'READ_ONLY' : 'MUTATES_DATA';
+        if (hasAuth) safetyClassification = 'REQUIRES_AUTH';
+
         capabilities.push({
           id: `${method.toUpperCase()} ${path}`,
           path,
           method: method.toUpperCase(),
-          summary,
+          summary: this.toSentenceCase(summary),
           isRead,
-          operationId,
-          inputSchema: this.normalizeSchema(typedDetails.parameters || typedDetails.requestBody),
-          outputSchema: this.normalizeSchema(typedDetails.responses?.['200']?.content?.['application/json']?.schema)
+          operationId: this.toCamelCase(operationId),
+          inputSchema: this.normalizeSchema(typedDetails.parameters || typedDetails.requestBody, spec),
+          outputSchema: this.normalizeSchema(typedDetails.responses?.['200']?.content?.['application/json']?.schema, spec),
+          safetyClassification
         });
       }
     }
@@ -68,24 +74,98 @@ export class OpenApiService {
     return { capabilities, validationErrors };
   }
 
-  private normalizeSchema(schema: any): any {
-    if (!schema) return undefined;
-    
-    // Repair: Heuristic for missing types if default exists
-    if (!schema.type && schema.default !== undefined) {
-      schema.type = typeof schema.default;
-    }
-    
-    // Repair: Missing descriptions in schema properties
-    if (schema.type === 'object' && schema.properties) {
-      for (const [propName, prop] of Object.entries(schema.properties as Record<string, any>)) {
-        if (!prop.description) {
-          prop.description = `The ${propName} property`;
+  private resolveRef(obj: any, root: any): any {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (obj.$ref && typeof obj.$ref === 'string') {
+      const parts = obj.$ref.split('/');
+      if (parts[0] === '#') {
+        let current = root;
+        for (let i = 1; i < parts.length; i++) {
+          current = current ? current[parts[i]] : undefined;
         }
+        return current || { type: 'string', description: 'Broken Reference' };
       }
     }
+    return obj;
+  }
 
-    return schema;
+  private normalizeSchema(schema: any, root: any, depth = 0): any {
+    if (!schema || depth > 10) return schema;
+    
+    // Resolve references
+    schema = this.resolveRef(schema, root);
+    if (!schema || typeof schema !== 'object') return schema;
+
+    // Handle allOf by merging (basic heuristic)
+    if (schema.allOf && Array.isArray(schema.allOf)) {
+      const merged = { ...schema };
+      delete merged.allOf;
+      for (const subSchema of schema.allOf) {
+        const resolvedSub = this.normalizeSchema(subSchema, root, depth + 1);
+        if (resolvedSub && typeof resolvedSub === 'object') {
+          Object.assign(merged, resolvedSub);
+          if (resolvedSub.properties) {
+            merged.properties = { ...(merged.properties || {}), ...resolvedSub.properties };
+          }
+        }
+      }
+      schema = merged;
+    }
+
+    // Deep copy to avoid mutating original spec
+    const normalized = Array.isArray(schema) ? [...schema] : { ...schema };
+
+    // Array handling
+    if (normalized.items) {
+      normalized.items = this.normalizeSchema(normalized.items, root, depth + 1);
+    }
+
+    // Property handling
+    if (normalized.properties) {
+      const newProps: Record<string, any> = {};
+      for (const [name, prop] of Object.entries(normalized.properties as Record<string, any>)) {
+        const normalizedProp = this.normalizeSchema(prop, root, depth + 1);
+        
+        // Repair: Missing description
+        if (!normalizedProp.description) {
+          normalizedProp.description = `Value for ${this.toSentenceCase(name)}`;
+        }
+
+        // Repair: Type inference
+        if (!normalizedProp.type) {
+          if (normalizedProp.enum) normalizedProp.type = 'string';
+          else if (normalizedProp.default !== undefined) normalizedProp.type = typeof normalizedProp.default;
+          else if (normalizedProp.example !== undefined) normalizedProp.type = typeof normalizedProp.example;
+          else if (normalizedProp.properties) normalizedProp.type = 'object';
+          else if (normalizedProp.items) normalizedProp.type = 'array';
+          else normalizedProp.type = 'string'; // Final fallback
+        }
+
+        newProps[name] = normalizedProp;
+      }
+      normalized.properties = newProps;
+    }
+
+    // Direct type inference for the root of this schema slice
+    if (!normalized.type && !normalized.properties && !normalized.items) {
+      if (normalized.enum) normalized.type = 'string';
+      else if (normalized.default !== undefined) normalized.type = typeof normalized.default;
+      else if (normalized.example !== undefined) normalized.type = typeof normalized.example;
+      else normalized.type = 'object'; // Assume object if it represents a body component
+    }
+
+    return normalized;
+  }
+
+  private toCamelCase(str: string): string {
+    return str
+      .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase())
+      .replace(/^[A-Z]/, c => c.toLowerCase());
+  }
+
+  private toSentenceCase(str: string): string {
+    const result = str.replace(/([A-Z])/g, " $1");
+    return result.charAt(0).toUpperCase() + result.slice(1).toLowerCase().trim();
   }
 }
 

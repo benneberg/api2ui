@@ -44,6 +44,15 @@ import { cn } from './lib/utils';
 import { Toasts, type Toast } from './components/Toasts';
 import { useHistory } from './hooks/useHistory';
 import { ProjectionRenderer, SchemaForm } from './components/ProjectionRenderer';
+import { FlowVisualizer } from './components/FlowVisualizer';
+import { mockDataService } from './services/mockDataService';
+
+const INTENT_TEMPLATES = [
+  { label: 'Resource Discovery', value: "Find all 'available' items and list their core attributes." },
+  { label: 'Status Audit', value: "Execute a health sweep across all endpoints and report non-200 statuses." },
+  { label: 'Data Aggregate', value: "Fetch all entities, group them by category, and calculate summary statistics." },
+  { label: 'Security Audit', value: "Identify all endpoints that mark sensitive fields as required." },
+];
 
 export default function App() {
   const [activeView, setActiveView] = useState<ViewType>('spec');
@@ -219,17 +228,10 @@ export default function App() {
         continue;
       }
       
-      const isPet = node.capability.path.includes('pet');
       const mockResult = {
         step: node.id,
         endpoint: node.capability.path,
-        data: isPet 
-          ? [
-              { id: 101, name: "Barnaby", status: "available", species: "Lion" },
-              { id: 102, name: "Sasha", status: "pending", species: "Tiger" },
-              { id: 103, name: "Mochi", status: "available", species: "Panda" }
-            ]
-          : [{ id: 1, info: "Generic resource data" }]
+        data: mockDataService.generateFromSchema(node.capability.outputSchema)
       };
       
       results.push(mockResult);
@@ -512,6 +514,21 @@ export default function App() {
                   </div>
 
                   <div className="space-y-6">
+                    <div className="space-y-2">
+                      <span className="mono-label">Intention Blueprints</span>
+                      <div className="flex flex-wrap gap-2">
+                        {INTENT_TEMPLATES.map((tmpl, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setJobDescription(tmpl.value)}
+                            className="px-3 py-1.5 border border-brand-line font-mono text-[10px] uppercase hover:bg-brand-accent hover:border-brand-accent hover:text-white transition-all bg-gray-50/50"
+                          >
+                            {tmpl.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="technical-grid">
                         <div className="p-3 bg-gray-50 flex items-center gap-2 border-b border-brand-line">
@@ -616,7 +633,13 @@ export default function App() {
                   <div className="bg-white border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#D1D1D1]">
                     <div className="mb-8">
                       <h2 className="font-serif italic text-4xl mb-4">Execution Runtime</h2>
-                      <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 04 // Graph Traversal Lab</p>
+                      <p className="text-gray-500 font-mono text-xs uppercase tracking-tight mb-8">Stage 04 // Graph Traversal Lab</p>
+                      
+                      {jdCard && (
+                        <div className="mb-8">
+                          <FlowVisualizer jdCard={jdCard} />
+                        </div>
+                      )}
                     </div>
 
                     <div className="bg-[#121212] p-6 text-white font-mono text-[11px] leading-relaxed relative overflow-hidden min-h-[300px]">
