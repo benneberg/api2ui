@@ -139,7 +139,7 @@ export default function App() {
   const [executionResult, setExecutionResult] = useState<any[]>([]);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [llmModel, setLlmModel] = useState('gemini-1.5-flash');
+  const [llmModel, setLlmModel] = useState('gemini-3.5-flash');
   const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);

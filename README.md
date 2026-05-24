@@ -7,7 +7,7 @@ A **schema-constrained orchestration compiler** with UI projection. It ingests O
 The system is built on a layered architecture to ensure predictability and safety:
 
 1.  **Ingestion & Normalization**: Normalizes messy OpenAPI specs into a clean **Capability Graph**.
-2.  **Intent Layer (LLM-Assisted)**: Maps natural language to structured intent using Gemini 1.5 Flash. The LLM ranks capabilities but does not decide execution flow.
+2.  **Intent Layer (LLM-Assisted)**: Maps natural language to structured intent using Gemini 3.5 Flash. The LLM ranks capabilities but does not decide execution flow.
 3.  **Deterministic Compiler**: Assembles the **Execution IR** from the intent and graph.
 4.  **UI Projection**: Maps data shapes to a fixed registry of technical components (Tables, Metrics, etc.).
 5.  **Runtime**: A schema-aware engine that handles execution and simulates data flows.

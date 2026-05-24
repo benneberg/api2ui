@@ -41,9 +41,12 @@ INSTRUCTIONS:
 3. Be deterministic. Do not invent capabilities.
 4. If the intent cannot be fulfilled, return an empty array for selectedCapabilities.`;
 
-        const genAI = new GoogleGenAI({ apiKey });
+        const genAI = new GoogleGenAI({ 
+          apiKey,
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+        });
         const result = await genAI.models.generateContent({
-          model: modelName || "gemini-1.5-flash",
+          model: modelName || "gemini-3.5-flash",
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           config: {
             temperature: 0,
@@ -81,7 +84,8 @@ ${capabilityContext}`;
         payload = {
           model: modelName || "meta-llama/llama-3.3-70b-instruct",
           messages: [{ role: "user", content: prompt }],
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          max_tokens: 1024
         };
       } else if (provider === "groq") {
         apiKey = apiKey || process.env.GROQ_API_KEY;
@@ -89,7 +93,8 @@ ${capabilityContext}`;
         payload = {
           model: modelName || "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: prompt }],
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          max_tokens: 1024
         };
       }
 
@@ -144,9 +149,9 @@ ${capabilityContext}`;
         return res.json(models);
       } else if (provider === "gemini") {
         return res.json([
-          { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }
+          { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+          { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
+          { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' }
         ]);
       }
       res.json([]);

@@ -5,7 +5,7 @@ export class InferenceService {
     description: string, 
     capabilities: Capability[], 
     provider: AIProvider = 'gemini',
-    modelName: string = "gemini-1.5-flash", 
+    modelName: string = "gemini-3.5-flash", 
     customApiKey?: string
   ): Promise<Intent> {
     const response = await fetch('/api/ai/extract', {
