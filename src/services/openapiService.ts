@@ -25,6 +25,19 @@ export class OpenApiService {
     
     const spec = await response.json();
     
+    // Determine Base URL for Execution
+    let baseUrl = '';
+    if (spec.servers && spec.servers.length > 0) {
+      baseUrl = spec.servers[0].url;
+    }
+    
+    // If baseUrl is relative, or missing, fallback to calculating from spec URL
+    if (!baseUrl || baseUrl.startsWith('/')) {
+      const urlObj = new URL(url);
+      const host = `${urlObj.protocol}//${urlObj.host}`;
+      baseUrl = baseUrl ? host + baseUrl : host;
+    }
+
     // 1. Validation Step
     const valid = validateSpec(spec);
     const validationErrors = !valid ? validateSpec.errors?.map(e => `${e.instancePath} ${e.message}`) : undefined;
@@ -41,6 +54,9 @@ export class OpenApiService {
         
         const typedDetails = details as any;
         const isRead = ['get', 'head', 'options'].includes(method.toLowerCase());
+        
+        // Full Path for Execution
+        const fullPath = path.startsWith('http') ? path : (baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl) + path;
         
         // Repair: Synthesize summary if missing
         let summary = typedDetails.summary || typedDetails.description;
@@ -59,7 +75,7 @@ export class OpenApiService {
 
         capabilities.push({
           id: `${method.toUpperCase()} ${path}`,
-          path,
+          path: fullPath,
           method: method.toUpperCase(),
           summary: this.toSentenceCase(summary),
           isRead,

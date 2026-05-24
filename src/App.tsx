@@ -46,6 +46,7 @@ import { useHistory } from './hooks/useHistory';
 import { ProjectionRenderer, SchemaForm } from './components/ProjectionRenderer';
 import { FlowVisualizer } from './components/FlowVisualizer';
 import { mockDataService } from './services/mockDataService';
+import { executionService } from './services/executionService';
 
 const INTENT_TEMPLATES = [
   { label: 'Resource Discovery', value: "Find all 'available' items and list their core attributes." },
@@ -67,6 +68,7 @@ export default function App() {
   const [projectName, setProjectName] = useState('Untitled Project');
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [isRealExecution, setIsRealExecution] = useState(false);
   
   // History controlled jdCard
   const { 
@@ -175,15 +177,12 @@ export default function App() {
     setIsExtracting(true);
     setError(null);
     try {
-      if (customApiKey) {
-        geminiService.configure(customApiKey);
-      }
-      const extractedIntent = await geminiService.extractIntent(jobDescription, capabilities, llmModel);
+      const extractedIntent = await geminiService.extractIntent(jobDescription, capabilities, llmModel, customApiKey);
       setIntent(extractedIntent);
       addToast("Intent Decoded Successfully", "success");
       setActiveView('plan');
-    } catch (err) {
-      setError("Failed to extract intent. Ensure GEMINI_API_KEY is configured.");
+    } catch (err: any) {
+      setError(err.message || "Failed to extract intent.");
       addToast("AI Generation Failed", "error");
     } finally {
       setIsExtracting(false);
@@ -209,7 +208,7 @@ export default function App() {
     setActiveView('lab');
   };
 
-  const runMockExecution = async () => {
+  const runExecution = async () => {
     if (!jdCard) return;
     setIsExecuting(true);
     setExecutionLogs([]);
@@ -221,21 +220,34 @@ export default function App() {
       const safetyStatus = node.capability.isRead || writeEnabled ? "SAFE" : "BLOCKED";
       
       setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] INITIATING_NODE: ${node.id} (${typeLabel})`]);
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise(resolve => setTimeout(resolve, isRealExecution ? 200 : 800));
       
       if (safetyStatus === "BLOCKED") {
         setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] FAULT: Node ${node.id} is a MUTATION and Write Session is DISABLED. Skipping.`]);
         continue;
       }
       
-      const mockResult = {
-        step: node.id,
-        endpoint: node.capability.path,
-        data: mockDataService.generateFromSchema(node.capability.outputSchema)
-      };
+      try {
+        let data;
+        if (isRealExecution) {
+          data = await executionService.executeNode(node, writeEnabled);
+        } else {
+          data = mockDataService.generateFromSchema(node.capability.outputSchema);
+        }
+
+        const res = {
+          step: node.id,
+          endpoint: node.capability.path,
+          data
+        };
+        
+        results.push(res);
+        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_COMPLETE: ${node.id} -> ${isRealExecution ? 'RESOLVED_FROM_HOST' : 'RESOLVED_WITH_SCHEMA_HINTS'}`]);
+      } catch (err: any) {
+        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_FAULT: ${err.message}`]);
+        if (isRealExecution) break; // Halting on real errors
+      }
       
-      results.push(mockResult);
-      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_COMPLETE: ${node.id} -> RESOLVED_WITH_SCHEMA_HINTS`]);
       await new Promise(resolve => setTimeout(resolve, 400));
     }
 
@@ -633,7 +645,24 @@ export default function App() {
                   <div className="bg-white border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#D1D1D1]">
                     <div className="mb-8">
                       <h2 className="font-serif italic text-4xl mb-4">Execution Runtime</h2>
-                      <p className="text-gray-500 font-mono text-xs uppercase tracking-tight mb-8">Stage 04 // Graph Traversal Lab</p>
+                      <div className="flex items-center justify-between mb-8">
+                        <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 04 // Graph Traversal Lab</p>
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <span className={cn("mono-label transition-colors", !isRealExecution ? "text-brand-accent font-bold" : "text-gray-400 group-hover:text-brand-ink")}>Simulation</span>
+                            <div 
+                              onClick={() => setIsRealExecution(!isRealExecution)}
+                              className="w-10 h-5 bg-gray-200 border-2 border-brand-ink relative shadow-[1px_1px_0_0_#121212]"
+                            >
+                              <div className={cn(
+                                "absolute top-0 bottom-0 w-4 bg-brand-ink transition-all",
+                                isRealExecution ? "right-0" : "left-0"
+                              )} />
+                            </div>
+                            <span className={cn("mono-label transition-colors", isRealExecution ? "text-brand-accent font-bold" : "text-gray-400 group-hover:text-brand-ink")}>Live Host</span>
+                          </label>
+                        </div>
+                      </div>
                       
                       {jdCard && (
                         <div className="mb-8">
@@ -670,14 +699,14 @@ export default function App() {
                     </div>
 
                     <button 
-                      onClick={runMockExecution}
+                      onClick={runExecution}
                       disabled={isExecuting}
                       className={cn(
                         "w-full font-bold py-6 mt-8 uppercase tracking-[0.2em] transition-all",
                         isExecuting ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-brand-ink text-white hover:bg-brand-accent shadow-[4px_4px_0_0_#121212] active:translate-y-1 active:shadow-none"
                       )}
                     >
-                      {isExecuting ? "Sequence Active ..." : "Initialize Mock Sequence"}
+                      {isExecuting ? "Sequence Active ..." : isRealExecution ? "Initialize Live Sequence" : "Initialize Simulation"}
                     </button>
                   </div>
                 </motion.div>
@@ -725,9 +754,18 @@ export default function App() {
                               key={i}
                               title={node.capability.summary || `Update ${node.capability.path}`}
                               schema={node.capability.inputSchema || { type: 'object', properties: {} }}
-                              onSubmit={(formData) => {
-                                console.log(`Executing mutation on ${node.capability.path}`, formData);
-                                addToast(`Transaction Queued: ${node.capability.operationId}`, "info");
+                              onSubmit={async (formData) => {
+                                if (isRealExecution) {
+                                  addToast(`Executing Live Mutation: ${node.id}`, "info");
+                                  try {
+                                    await executionService.executeNode({...node, input: formData}, writeEnabled);
+                                    addToast("Mutation Success", "success");
+                                  } catch (err: any) {
+                                    addToast("Mutation Failed", "error", [err.message]);
+                                  }
+                                } else {
+                                  addToast(`Simulation: Transaction Queued`, "info");
+                                }
                               }}
                             />
                           ))}
