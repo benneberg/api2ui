@@ -21,6 +21,7 @@ export interface ExecutionNode {
   capability: Capability;
   type: 'READ' | 'MUTATION';
   bindings: Record<string, any>;
+  input?: Record<string, any>;
 }
 
 export interface ExecutionEdge {
@@ -66,4 +67,19 @@ export interface Project {
   name: string;
   jdCard: jdCard | null;
   updatedAt: string;
+}
+
+export interface RepairIssue {
+  type: 'BROKEN_REF' | 'MISSING_TYPE' | 'MISSING_SUMMARY' | 'MALFORMED_SPEC' | 'INVALID_JSON';
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  location: string;
+  message: string;
+  heuristic?: string;
+  suggestion?: any;
+}
+
+export interface RepairReport {
+  timestamp: string;
+  issues: RepairIssue[];
+  fixedIssues: number;
 }

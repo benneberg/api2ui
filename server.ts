@@ -39,7 +39,8 @@ INSTRUCTIONS:
 1. Identify the high-level goal.
 2. Select EXACT capability IDs from the list above that are necessary to fulfill the intent.
 3. Be deterministic. Do not invent capabilities.
-4. If the intent cannot be fulfilled, return an empty array for selectedCapabilities.`;
+4. If the intent cannot be fulfilled, return an empty array for selectedCapabilities.
+5. Respond ONLY with a valid JSON object.`;
 
         const genAI = new GoogleGenAI({ 
           apiKey,
@@ -64,14 +65,22 @@ INSTRUCTIONS:
             }
           }
         });
-        return res.json(JSON.parse(result.text || result.candidates?.[0]?.content?.parts?.[0]?.text || "{}"));
+        
+        const responseText = result.text || "";
+        return res.json(JSON.parse(responseText || "{}"));
       } 
       
       const capabilityContext = (capabilities as any[])
         .map((c: any) => `- ${c.id}: ${c.summary}`)
         .join("\n");
 
-      const prompt = `You are a precise API Orchestration Planner. Match the user intent to available API capabilities. Return ONLY a JSON object with "goal" (string) and "selectedCapabilities" (string array).
+      const prompt = `You are a precise API Orchestration Planner. Match the user intent to available API capabilities.
+      
+Return ONLY a valid JSON object with the following structure:
+{
+  "goal": "string describing the high level goal",
+  "selectedCapabilities": ["ID1", "ID2", ...]
+}
 
 USER INTENT: "${description}"
 
@@ -85,7 +94,7 @@ ${capabilityContext}`;
           model: modelName || "meta-llama/llama-3.3-70b-instruct",
           messages: [{ role: "user", content: prompt }],
           response_format: { type: "json_object" },
-          max_tokens: 1024
+          max_tokens: 512
         };
       } else if (provider === "groq") {
         apiKey = apiKey || process.env.GROQ_API_KEY;
@@ -94,7 +103,7 @@ ${capabilityContext}`;
           model: modelName || "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: prompt }],
           response_format: { type: "json_object" },
-          max_tokens: 1024
+          max_tokens: 512
         };
       }
 
@@ -113,7 +122,8 @@ ${capabilityContext}`;
       if (!response.ok) throw new Error(data.error?.message || "AI Request Failed");
       
       const content = data.choices[0].message.content;
-      res.json(JSON.parse(content));
+      const cleanedContent = content.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+      res.json(JSON.parse(cleanedContent));
     } catch (error: any) {
       console.error("AI Proxy Error:", error);
       res.status(500).json({ error: error.message || "Internal AI Error" });
@@ -175,11 +185,17 @@ ${capabilityContext}`;
       });
 
       const contentType = response.headers.get("content-type");
+      const text = await response.text();
+
       if (contentType && contentType.includes("application/json")) {
-        const data = await response.json();
-        res.status(response.status).json(data);
+        try {
+          const data = JSON.parse(text);
+          res.status(response.status).json(data);
+        } catch (e) {
+          // If it fails to parse as JSON despite the header, send as text
+          res.status(response.status).send(text);
+        }
       } else {
-        const text = await response.text();
         res.status(response.status).send(text);
       }
     } catch (error: any) {

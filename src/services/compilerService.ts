@@ -1,7 +1,7 @@
 import { type Capability, type Intent, type ExecutionNode, type ExecutionEdge, type jdCard } from "../types";
 
 export class CompilerService {
-  compile(intent: Intent, capabilityGraph: Capability[], writeEnabled: boolean): jdCard {
+  compile(intent: Intent, capabilityGraph: Capability[], writeEnabled: boolean, nodeInputs: Record<string, any> = {}): jdCard {
     const nodes: ExecutionNode[] = [];
     const edges: ExecutionEdge[] = [];
     let lastNodeId: string | null = null;
@@ -22,7 +22,8 @@ export class CompilerService {
         capabilityId: capability.id,
         capability,
         type: capability.isRead ? 'READ' : 'MUTATION',
-        bindings: {}
+        bindings: {},
+        input: nodeInputs[capId] || {}
       });
 
       if (lastNodeId) {

@@ -7,7 +7,8 @@ import {
   FileText,
   Calendar,
   CheckSquare,
-  ChevronDown
+  ChevronDown,
+  Zap
 } from 'lucide-react';
 import { 
   BarChart as ReBarChart, 

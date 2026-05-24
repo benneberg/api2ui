@@ -9,7 +9,7 @@ export const executionService = {
       throw new Error(`MUTATION_BLOCKED: Write mode disabled for ${node.id}`);
     }
 
-    const { url, method } = this.resolveUrlAndMethod(node);
+    const { url, method, bodyParams } = this.resolveUrlAndMethod(node);
     
     try {
       // Use the backend proxy to avoid CORS issues
@@ -19,28 +19,29 @@ export const executionService = {
         body: JSON.stringify({
           url,
           method,
-          body: node.input || undefined
+          body: method !== 'GET' ? bodyParams : undefined
         })
       });
 
+      const text = await response.text();
       const contentType = response.headers.get('content-type');
-      if (!response.ok) {
-        let errorData;
-        if (contentType?.includes('application/json')) {
-          errorData = await response.json();
-        } else {
-          errorData = { error: await response.text() };
-        }
-        throw new Error(errorData.error || `HTTP ${response.status} from ${url}`);
-      }
+      let data: any;
 
       if (contentType?.includes('application/json')) {
-        return await response.json();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          data = { message: text };
+        }
       } else {
-        const text = await response.text();
-        // Try to see if it's text that looks like a message
-        return { message: text };
+        data = { message: text };
       }
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || `HTTP ${response.status} from ${url}`);
+      }
+
+      return data;
     } catch (err: any) {
       console.error("Execution Error:", err);
       throw err;
@@ -50,24 +51,62 @@ export const executionService = {
   resolveUrlAndMethod(node: any) {
     let url = node.capability.path;
     const method = node.capability.method;
-    const params = { ...(node.input || {}), ...(node.bindings || {}) };
+    const allParams = { ...(node.input || {}), ...(node.bindings || {}) };
+    const usedParams = new Set<string>();
 
     // Resolve path parameters: /user/{username} -> /user/ben
     if (url.includes('{')) {
       const pathParams = url.match(/\{([^}]+)\}/g);
       pathParams?.forEach(placeholder => {
         const key = placeholder.replace(/[{}]/g, '');
-        if (params[key]) {
-          url = url.replace(placeholder, String(params[key]));
+        usedParams.add(key);
+        if (allParams[key] !== undefined) {
+          url = url.replace(placeholder, encodeURIComponent(String(allParams[key])));
         } else {
           // Fallback to mock value if missing
           const paramSchema = node.capability.inputSchema?.properties?.[key] || { type: 'string' };
           const mockVal = mockDataService.generateObject(paramSchema);
-          url = url.replace(placeholder, String(mockVal));
+          url = url.replace(placeholder, encodeURIComponent(String(mockVal)));
         }
       });
     }
+
+    // Handle Query Parameters for GET requests
+    if (method === 'GET') {
+      const queryParams = new URLSearchParams();
+      Object.entries(allParams).forEach(([key, value]) => {
+        if (!usedParams.has(key) && value !== undefined) {
+          if (Array.isArray(value)) {
+            value.forEach(v => queryParams.append(key, String(v)));
+          } else {
+            queryParams.append(key, String(value));
+          }
+        }
+      });
+      const queryString = queryParams.toString();
+      if (queryString) {
+        url += (url.includes('?') ? '&' : '?') + queryString;
+      }
+    }
+
+    // Determine body parameters (anything not used in URL)
+    let bodyParams: any = undefined;
+    if (method !== 'GET' && method !== 'HEAD') {
+      if (allParams['_body'] !== undefined) {
+        bodyParams = allParams['_body'];
+      } else {
+        const filtered: Record<string, any> = {};
+        let hasBody = false;
+        Object.entries(allParams).forEach(([key, value]) => {
+          if (!usedParams.has(key) && key !== '_body') {
+            filtered[key] = value;
+            hasBody = true;
+          }
+        });
+        if (hasBody) bodyParams = filtered;
+      }
+    }
     
-    return { url, method };
+    return { url, method, bodyParams };
   }
 };

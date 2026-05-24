@@ -1,6 +1,6 @@
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
-import { type Capability } from "../types";
+import { type Capability, type RepairReport, type RepairIssue } from "../types";
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -19,12 +19,32 @@ const openApiSchema = {
 const validateSpec = ajv.compile(openApiSchema);
 
 export class OpenApiService {
-  async fetchAndNormalize(url: string): Promise<{ capabilities: Capability[], validationErrors?: string[] }> {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Failed to fetch spec");
-    
-    const spec = await response.json();
-    
+  private currentIssues: RepairIssue[] = [];
+  private fixedCount = 0;
+
+  async fetchAndNormalize(url: string, autoFix = true): Promise<{ 
+    capabilities: Capability[], 
+    validationErrors?: string[],
+    repairReport: RepairReport 
+  }> {
+    this.currentIssues = [];
+    this.fixedCount = 0;
+
+    let spec: any;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to fetch spec");
+      spec = await response.json();
+    } catch (err) {
+      this.addIssue({
+        type: 'INVALID_JSON',
+        severity: 'HIGH',
+        location: url,
+        message: 'The URL did not return a valid JSON OpenAPI specification.'
+      });
+      return { capabilities: [], repairReport: this.getReport() };
+    }
+
     // Determine Base URL for Execution
     let baseUrl = '';
     if (spec.servers && spec.servers.length > 0) {
@@ -40,7 +60,16 @@ export class OpenApiService {
 
     // 1. Validation Step
     const valid = validateSpec(spec);
-    const validationErrors = !valid ? validateSpec.errors?.map(e => `${e.instancePath} ${e.message}`) : undefined;
+    if (!valid) {
+      validateSpec.errors?.forEach(e => {
+        this.addIssue({
+          type: 'MALFORMED_SPEC',
+          severity: 'MEDIUM',
+          location: e.instancePath || 'root',
+          message: e.message || 'Validation error'
+        });
+      });
+    }
 
     // 2. Normalization & Heuristics
     const capabilities: Capability[] = [];
@@ -62,7 +91,19 @@ export class OpenApiService {
         let summary = typedDetails.summary || typedDetails.description;
         if (!summary) {
           const pathParts = path.split('/').filter(p => p && !p.startsWith('{'));
-          summary = `${method.toUpperCase()} ${pathParts.join(' ')}`.trim() || `Execution at ${path}`;
+          const suggested = `${method.toUpperCase()} ${pathParts.join(' ')}`.trim() || `Execution at ${path}`;
+          this.addIssue({
+            type: 'MISSING_SUMMARY',
+            severity: 'LOW',
+            location: `${method.toUpperCase()} ${path}`,
+            message: 'Endpoint is missing a summary or description.',
+            heuristic: 'Path segments synthesis',
+            suggestion: suggested
+          });
+          if (autoFix) {
+            summary = suggested;
+            this.fixedCount++;
+          }
         }
 
         // Repair: Generate operationId if missing
@@ -77,20 +118,69 @@ export class OpenApiService {
           id: `${method.toUpperCase()} ${path}`,
           path: fullPath,
           method: method.toUpperCase(),
-          summary: this.toSentenceCase(summary),
+          summary: this.toSentenceCase(summary || ''),
           isRead,
           operationId: this.toCamelCase(operationId),
-          inputSchema: this.normalizeSchema(typedDetails.parameters || typedDetails.requestBody, spec),
-          outputSchema: this.normalizeSchema(typedDetails.responses?.['200']?.content?.['application/json']?.schema, spec),
+          inputSchema: this.normalizeInput(typedDetails.parameters, typedDetails.requestBody, spec, `${method.toUpperCase()} ${path} (Input)`, autoFix),
+          outputSchema: this.normalizeSchema(typedDetails.responses?.['200']?.content?.['application/json']?.schema, spec, `${method.toUpperCase()} ${path} (Output)`, autoFix),
           safetyClassification
         });
       }
     }
 
-    return { capabilities, validationErrors };
+    return { 
+      capabilities, 
+      validationErrors: !valid ? validateSpec.errors?.map(e => `${e.instancePath} ${e.message}`) : undefined,
+      repairReport: this.getReport()
+    };
   }
 
-  private resolveRef(obj: any, root: any): any {
+  private addIssue(issue: RepairIssue) {
+    this.currentIssues.push(issue);
+  }
+
+  private getReport(): RepairReport {
+    return {
+      timestamp: new Date().toISOString(),
+      issues: [...this.currentIssues],
+      fixedIssues: this.fixedCount
+    };
+  }
+
+  private normalizeInput(parameters: any[] | undefined, requestBody: any | undefined, spec: any, location: string, autoFix: boolean): any {
+    let combinedSchema: any = { type: 'object', properties: {} };
+
+    if (parameters && Array.isArray(parameters)) {
+      parameters.forEach((param, i) => {
+        const resolvedParam = this.resolveRef(param, spec, `${location}.param[${i}]`, autoFix);
+        if (resolvedParam && resolvedParam.name) {
+          const paramSchema = resolvedParam.schema || { type: 'string' };
+          combinedSchema.properties[resolvedParam.name] = this.normalizeSchema(paramSchema, spec, `${location}.${resolvedParam.name}`, autoFix);
+          if (resolvedParam.description) {
+            combinedSchema.properties[resolvedParam.name].description = resolvedParam.description;
+          }
+        }
+      });
+    }
+
+    if (requestBody) {
+      const resolvedBody = this.resolveRef(requestBody, spec, `${location}.requestBody`, autoFix);
+      const bodyContent = resolvedBody?.content?.['application/json']?.schema || resolvedBody?.schema;
+      if (bodyContent) {
+        const normalizedBody = this.normalizeSchema(bodyContent, spec, `${location}.body`, autoFix);
+        if (normalizedBody.properties) {
+          combinedSchema.properties = { ...combinedSchema.properties, ...normalizedBody.properties };
+        } else {
+          // Flatten body if it's named 'body' or anonymous
+          combinedSchema.properties['_body'] = normalizedBody;
+        }
+      }
+    }
+
+    return combinedSchema;
+  }
+
+  private resolveRef(obj: any, root: any, location: string, autoFix: boolean): any {
     if (!obj || typeof obj !== 'object') return obj;
     if (obj.$ref && typeof obj.$ref === 'string') {
       const parts = obj.$ref.split('/');
@@ -99,17 +189,31 @@ export class OpenApiService {
         for (let i = 1; i < parts.length; i++) {
           current = current ? current[parts[i]] : undefined;
         }
-        return current || { type: 'string', description: 'Broken Reference' };
+        if (!current) {
+          this.addIssue({
+            type: 'BROKEN_REF',
+            severity: 'HIGH',
+            location,
+            message: `Reference ${obj.$ref} could not be resolved.`,
+            heuristic: 'Fallback to string',
+            suggestion: { type: 'string' }
+          });
+          if (autoFix) {
+            this.fixedCount++;
+            return { type: 'string', description: 'Repaired Reference' };
+          }
+        }
+        return current;
       }
     }
     return obj;
   }
 
-  private normalizeSchema(schema: any, root: any, depth = 0): any {
+  private normalizeSchema(schema: any, root: any, location: string, autoFix: boolean, depth = 0): any {
     if (!schema || depth > 10) return schema;
     
     // Resolve references
-    schema = this.resolveRef(schema, root);
+    schema = this.resolveRef(schema, root, location, autoFix);
     if (!schema || typeof schema !== 'object') return schema;
 
     // Handle allOf by merging (basic heuristic)
@@ -117,7 +221,7 @@ export class OpenApiService {
       const merged = { ...schema };
       delete merged.allOf;
       for (const subSchema of schema.allOf) {
-        const resolvedSub = this.normalizeSchema(subSchema, root, depth + 1);
+        const resolvedSub = this.normalizeSchema(subSchema, root, location, autoFix, depth + 1);
         if (resolvedSub && typeof resolvedSub === 'object') {
           Object.assign(merged, resolvedSub);
           if (resolvedSub.properties) {
@@ -133,14 +237,14 @@ export class OpenApiService {
 
     // Array handling
     if (normalized.items) {
-      normalized.items = this.normalizeSchema(normalized.items, root, depth + 1);
+      normalized.items = this.normalizeSchema(normalized.items, root, location, autoFix, depth + 1);
     }
 
     // Property handling
     if (normalized.properties) {
       const newProps: Record<string, any> = {};
       for (const [name, prop] of Object.entries(normalized.properties as Record<string, any>)) {
-        const normalizedProp = this.normalizeSchema(prop, root, depth + 1);
+        const normalizedProp = this.normalizeSchema(prop, root, `${location}.${name}`, autoFix, depth + 1);
         
         // Repair: Missing description
         if (!normalizedProp.description) {
@@ -149,12 +253,26 @@ export class OpenApiService {
 
         // Repair: Type inference
         if (!normalizedProp.type) {
-          if (normalizedProp.enum) normalizedProp.type = 'string';
-          else if (normalizedProp.default !== undefined) normalizedProp.type = typeof normalizedProp.default;
-          else if (normalizedProp.example !== undefined) normalizedProp.type = typeof normalizedProp.example;
-          else if (normalizedProp.properties) normalizedProp.type = 'object';
-          else if (normalizedProp.items) normalizedProp.type = 'array';
-          else normalizedProp.type = 'string'; // Final fallback
+          let inferredType = 'string';
+          if (normalizedProp.enum) inferredType = 'string';
+          else if (normalizedProp.default !== undefined) inferredType = typeof normalizedProp.default;
+          else if (normalizedProp.example !== undefined) inferredType = typeof normalizedProp.example;
+          else if (normalizedProp.properties) inferredType = 'object';
+          else if (normalizedProp.items) inferredType = 'array';
+
+          this.addIssue({
+            type: 'MISSING_TYPE',
+            severity: 'MEDIUM',
+            location: `${location}.${name}`,
+            message: `Property '${name}' is missing a type definition.`,
+            heuristic: 'Type inference from usage context',
+            suggestion: inferredType
+          });
+
+          if (autoFix) {
+            normalizedProp.type = inferredType;
+            this.fixedCount++;
+          }
         }
 
         newProps[name] = normalizedProp;
@@ -164,10 +282,24 @@ export class OpenApiService {
 
     // Direct type inference for the root of this schema slice
     if (!normalized.type && !normalized.properties && !normalized.items) {
-      if (normalized.enum) normalized.type = 'string';
-      else if (normalized.default !== undefined) normalized.type = typeof normalized.default;
-      else if (normalized.example !== undefined) normalized.type = typeof normalized.example;
-      else normalized.type = 'object'; // Assume object if it represents a body component
+      let inferredType = 'object';
+      if (normalized.enum) inferredType = 'string';
+      else if (normalized.default !== undefined) inferredType = typeof normalized.default;
+      else if (normalized.example !== undefined) inferredType = typeof normalized.example;
+
+      this.addIssue({
+        type: 'MISSING_TYPE',
+        severity: 'MEDIUM',
+        location,
+        message: 'Schema fragment is missing a type definition.',
+        heuristic: 'Inferred based on content',
+        suggestion: inferredType
+      });
+
+      if (autoFix) {
+        normalized.type = inferredType;
+        this.fixedCount++;
+      }
     }
 
     return normalized;

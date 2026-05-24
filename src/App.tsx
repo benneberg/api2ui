@@ -36,7 +36,8 @@ import {
   Cpu,
   Globe,
   Zap,
-  Layout
+  Layout,
+  Edit3
 } from 'lucide-react';
 import { openApiService } from './services/openapiService';
 import { inferenceService } from './services/geminiService';
@@ -136,6 +137,10 @@ export default function App() {
   const [writeEnabled, setWriteEnabled] = useState(false);
   const [showWriteConfirm, setShowWriteConfirm] = useState(false);
   const [specValidationErrors, setSpecValidationErrors] = useState<string[]>([]);
+  const [repairReport, setRepairReport] = useState<any>(null);
+  const [autoFixEnabled, setAutoFixEnabled] = useState(true);
+  const [nodeInputs, setNodeInputs] = useState<Record<string, any>>({});
+  const [configuringNode, setConfiguringNode] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<any[]>([]);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -150,12 +155,18 @@ export default function App() {
     setIsIngesting(true);
     setError(null);
     setSpecValidationErrors([]);
+    setRepairReport(null);
     try {
-      const { capabilities: caps, validationErrors } = await openApiService.fetchAndNormalize(specUrl);
+      const { capabilities: caps, validationErrors, repairReport: report } = await openApiService.fetchAndNormalize(specUrl, autoFixEnabled);
       setCapabilities(caps);
+      setRepairReport(report);
+      
       if (validationErrors && validationErrors.length > 0) {
         setSpecValidationErrors(validationErrors);
-        addToast("Spec ingestion complete with warnings", "info");
+      }
+
+      if (report.issues.length > 0) {
+        addToast(`Repair Report Generated: ${report.issues.length} issues identified`, "info");
       } else {
         addToast("Capability Graph Synchronized", "success");
         setActiveView('intent');
@@ -221,7 +232,7 @@ export default function App() {
 
   const handleCompile = () => {
     if (!intent) return;
-    const compiled = compilerService.compile(intent, capabilities, writeEnabled);
+    const compiled = compilerService.compile(intent, capabilities, writeEnabled, nodeInputs);
     compiled.metadata.specUrl = specUrl;
     
     // Validate artifact against formal schema
@@ -536,6 +547,17 @@ export default function App() {
                         placeholder="SOURCE_URL"
                       />
                     </div>
+
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox" 
+                        id="autofix" 
+                        checked={autoFixEnabled} 
+                        onChange={(e) => setAutoFixEnabled(e.target.checked)}
+                        className="accent-brand-accent"
+                      />
+                      <label htmlFor="autofix" className="mono-label cursor-pointer select-none">Enable Heuristic Auto-Fix Engine</label>
+                    </div>
                     
                     <button 
                       onClick={handleIngest}
@@ -544,6 +566,62 @@ export default function App() {
                     >
                       {isIngesting ? <RefreshCw className="animate-spin mx-auto" /> : "Build Capability Graph"}
                     </button>
+
+                    {repairReport && (
+                      <div className="mt-8 border-2 border-brand-ink p-6 bg-gray-50 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex items-center justify-between border-b border-brand-line pb-4">
+                          <div className="flex items-center gap-2 text-brand-ink font-bold uppercase text-xs">
+                            <RefreshCw size={14} className={cn(autoFixEnabled && "text-brand-accent animate-[spin_3s_linear_infinite]")} />
+                            Ingestion Repair Report
+                          </div>
+                          <div className="mono-label text-[9px] bg-white border px-2 py-0.5">
+                            FOUND: {repairReport.issues.length} // REPAIRED: {repairReport.fixedIssues}
+                          </div>
+                        </div>
+                        
+                        {repairReport.issues.length > 0 ? (
+                          <div className="max-h-[300px] overflow-y-auto space-y-3 no-scrollbar">
+                            {repairReport.issues.map((issue: any, i: number) => (
+                              <div key={i} className="bg-white border border-brand-line p-3 text-[10px] shadow-sm">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className={cn(
+                                    "px-1.5 py-0.5 rounded-sm font-bold uppercase text-[8px]",
+                                    issue.severity === 'HIGH' ? "bg-red-100 text-red-700" :
+                                    issue.severity === 'MEDIUM' ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                                  )}>
+                                    {issue.severity}_{issue.type}
+                                  </span>
+                                  <span className="text-gray-400 font-mono text-[8px] italic truncate ml-4">@{issue.location}</span>
+                                </div>
+                                <p className="text-gray-700 mb-2 leading-relaxed">{issue.message}</p>
+                                {issue.heuristic && (
+                                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed border-gray-100">
+                                    <Zap size={10} className="text-brand-accent" />
+                                    <span className="font-mono text-gray-400 uppercase text-[8px]">Heuristic: {issue.heuristic}</span>
+                                    <div className="ml-auto flex items-center gap-1 font-mono text-brand-accent text-[8px]">
+                                      <ChevronRight size={10} />
+                                      <span className="font-bold">Suggestion: {typeof issue.suggestion === 'object' ? 'JSON_BODY' : issue.suggestion}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-8 text-center bg-white border border-brand-line border-dashed">
+                            <CheckCircle size={24} className="mx-auto text-green-500 mb-2" />
+                            <p className="font-mono text-[10px] text-gray-400 uppercase">Spec Integrity Verified // No issues detected</p>
+                          </div>
+                        )}
+                        
+                        <button 
+                          onClick={() => setActiveView('intent')}
+                          className="w-full bg-brand-ink text-white font-bold py-3 uppercase tracking-widest text-[10px] hover:bg-brand-accent transition-all shadow-[4px_4px_0_0_#D1D1D1]"
+                        >
+                          Acknowledge & Proceed
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -674,21 +752,83 @@ export default function App() {
                     <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 03 // Deterministic Graph Assembly</p>
                   </div>
 
-                  <div className="space-y-4">
-                    {intent?.selectedCapabilities.map((capId, idx) => (
-                      <div key={idx} className="flex items-center border border-brand-line group hover:border-brand-ink transition-colors">
-                        <div className="w-12 h-12 bg-gray-50 flex items-center justify-center font-mono text-xs border-r border-brand-line">
-                          {idx + 1}
+                  <div className="space-y-6">
+                    {intent?.selectedCapabilities.map((capId, idx) => {
+                      const capability = capabilities.find(c => c.id === capId);
+                      const hasProperties = capability?.inputSchema?.properties && Object.keys(capability.inputSchema.properties).length > 0;
+                      const hasPathParams = capability?.path.includes('{');
+                      const isParameterized = capability && (hasProperties || hasPathParams);
+                      const isConfiguring = configuringNode === capId;
+                      
+                      return (
+                        <div key={idx} className="space-y-4">
+                          <div className={cn(
+                            "flex items-center border-2 border-brand-ink transition-all",
+                            isConfiguring ? "bg-gray-50 shadow-[4px_4px_0_0_#121212]" : "hover:bg-gray-50 border-brand-line"
+                          )}>
+                            <div className="w-12 h-12 bg-gray-50 flex items-center justify-center font-mono text-xs border-r-2 border-brand-ink font-bold">
+                              {idx + 1}
+                            </div>
+                            <div className="flex-1 px-4 py-3">
+                              <code className="text-xs font-bold text-brand-accent block truncate">{capId}</code>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="mono-label text-[9px]">
+                                  STATE: {nodeInputs[capId] ? 'BINDING_RESOLVED' : (isParameterized ? 'AWAITING_AUTHORIZATION_PARAMS' : 'UNBOUND_NODE')}
+                                </span>
+                                {isParameterized && !nodeInputs[capId] && <Zap size={10} className="text-brand-accent animate-pulse" />}
+                                {nodeInputs[capId] && <CheckCircle size={10} className="text-green-500" />}
+                              </div>
+                            </div>
+                            
+                            {isParameterized ? (
+                              <button 
+                                onClick={() => setConfiguringNode(isConfiguring ? null : capId)}
+                                className={cn(
+                                  "px-6 h-12 border-l-2 border-brand-ink font-mono text-[10px] font-bold uppercase transition-all flex items-center gap-2",
+                                  isConfiguring ? "bg-brand-ink text-white" : "hover:bg-brand-accent hover:text-white"
+                                )}
+                              >
+                                <Edit3 size={14} />
+                                {isConfiguring ? 'CANCEL' : 'CONFIGURE'}
+                              </button>
+                            ) : (
+                              <div className="px-6 h-12 border-l border-brand-line flex items-center bg-gray-50">
+                                <Activity size={14} className="text-gray-300" />
+                              </div>
+                            )}
+                          </div>
+
+                          <AnimatePresence>
+                            {isConfiguring && capability && (
+                              <motion.div 
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden border-x-2 border-b-2 border-brand-ink"
+                              >
+                                <div className="p-8 bg-white space-y-6">
+                                  <div className="flex items-center gap-3 border-b-2 border-brand-ink pb-4 mb-2">
+                                    <div className="w-8 h-8 bg-brand-ink text-white flex items-center justify-center font-mono text-xs">
+                                      CFG
+                                    </div>
+                                    <h3 className="font-serif italic text-xl">Parameter Mapping</h3>
+                                  </div>
+                                  <SchemaForm 
+                                    title={`Parameters: ${capability.summary}`}
+                                    schema={capability.inputSchema || { type: 'object', properties: {} }}
+                                    onSubmit={(data) => {
+                                      setNodeInputs(prev => ({ ...prev, [capId]: data }));
+                                      setConfiguringNode(null);
+                                      addToast(`Parameters mapped to ${capId}`, "success");
+                                    }}
+                                  />
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
-                        <div className="flex-1 px-4 py-3">
-                          <code className="text-xs font-bold text-brand-accent">{capId}</code>
-                          <div className="mono-label mt-1">Status: Unbound_Node</div>
-                        </div>
-                        <button className="px-4 py-3 border-l border-brand-line hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all">
-                          <RefreshCw size={14} />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
 
                     <button 
                       onClick={handleCompile}
