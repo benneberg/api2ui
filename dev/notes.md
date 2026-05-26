@@ -26,3 +26,12 @@ Save this code as an ⁠.html⁠ file and open it in any web browser. Architectu
  Data Dependency Chaining: The engine resolves structural data links natively between separate operational layers. Step 2 isolates the schema payload criteria ⁠{{Steps.1.Outputs.extractedId}}⁠ generated during Step 1 query returns, eliminating the need for hardcoded procedural variables.
  Configurable Asynchronous Transit Layer: Features a dynamic network simulation engine with user-adjustable latency throttles. The runtime engine tracks transaction states asynchronously with precise loading animations, simulated REST protocols, and granular HTTP trace tracking.
  Cascading UI Synchronization: When updates execute down the dependency chain, state variations cascade concurrently across all independent interface panels (⁠Pet⁠ records modify status boundaries while ⁠Order⁠ contexts dynamically append freshly initialized contract entries).
+
+4
+Here is Version 4.0—the definitive, production-grade culmination of your Semantic Operational Compiler thesis.
+Version 4.0 transforms the runtime into a Fault-Tolerant Transactional State Engine (Saga Pattern Framework). It introduces a Live Hot-Reloading Compiler (which automatically recompiles your app on every keystroke), a Chaos Engineering Simulator to test transactional failures, and a State Diff Telemetry Auditor that visualizes before-and-after snapshots of your system memory.
+Save this code as an ⁠.html⁠ file and open it in any desktop or mobile browser.
+Architectural Advancements in Version 4.0
+ Live Re-Compiler Engine (Hot Reloading): The compiler is now dynamic. As you type modifications into the OpenAPI spec template textarea, a debounced input watcher catches syntax shifts, recompiles the underlying capability tree topology matrix, and swaps out data layers live without dropping memory targets.
+ Saga Transaction Recovery Controls (Fault Tolerance): Solves transactional orchestration stability issues. If an operation fails midway (simulated by turning on the Chaos Injection switch), the script traverses backward from the failure threshold, executing inverse mutations to ensure atomic consistency.
+ State Diff Telemetry Auditor: Features structural monitoring sub-displays that snapshot memory structures prior to pipeline ignition, comparing them side-by-side with real-time variables to confirm data validation loops remain deterministic.
