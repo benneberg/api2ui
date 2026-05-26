@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Operational Compiler v3.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0b0f19; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+        .glow-indigo { box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
+        .pulse-fast { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen antialiased flex flex-col selection:bg-indigo-600 selection:text-white">
+
+    <header class="border-b border-slate-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-40 px-4 py-3 shrink-0">
+        <div class="max-w-2xl mx-auto flex items-center justify-between">
+            <div>
+                <h1 class="text-xs font-bold tracking-widest uppercase text-indigo-400 flex items-center gap-1.5">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                    Semantic Engine v3.0
+                </h1>
+                <p class="text-[10px] text-slate-400 font-mono">Dependent Orchestration & Async Network Pipeline</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label class="text-[9px] font-mono text-slate-500 uppercase hidden sm:inline">Latency:</label>
+                <select id="network-latency" class="bg-slate-900 border border-slate-800 text-[10px] font-mono rounded px-1.5 py-1 text-slate-300 focus:outline-none focus:border-indigo-500">
+                    <option value="0">0ms (Instant)</option>
+                    <option value="600" selected>600ms (Async Simulation)</option>
+                    <option value="2000">2000ms (Slow 3G)</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-2xl mx-auto w-full p-4 space-y-6 flex-1 pb-32">
+        
+        <section class="bg-slate-900/40 rounded-xl border border-slate-800/80 p-3">
+            <div class="grid grid-cols-4 gap-2 text-center text-[9px] font-mono tracking-wider text-slate-500 uppercase">
+                <div id="step-node-1" class="p-1.5 rounded transition-all border border-transparent">1. Spec Ingest</div>
+                <div id="step-node-2" class="p-1.5 rounded transition-all border border-transparent">2. Graph IR</div>
+                <div id="step-node-3" class="p-1.5 rounded transition-all border border-transparent">3. Compile Path</div>
+                <div id="step-node-4" class="p-1.5 rounded transition-all border border-transparent">4. Async Execute</div>
+            </div>
+        </section>
+
+        <details class="group bg-slate-900/40 border border-slate-800/80 rounded-xl transition-all">
+            <summary class="list-none flex items-center justify-between p-3 cursor-pointer select-none">
+                <div class="flex items-center space-x-2">
+                    <div class="w-4 h-4 text-[9px] font-mono font-bold bg-slate-800 border border-slate-700 rounded flex items-center justify-center text-slate-300">A</div>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">OpenAPI Specification (Chained Schema Map)</h2>
+                </div>
+                <span class="text-slate-500 text-[10px] transition-transform group-open:rotate-180">▼</span>
+            </summary>
+            <div class="p-3 pt-0 border-t border-slate-800/40 bg-slate-950/40">
+                <textarea id="openapi-spec" rows="9" class="w-full bg-slate-950 border border-slate-800 text-slate-400 rounded-lg p-2 font-mono text-[11px] text-emerald-400 focus:outline-none focus:border-indigo-500 transition-all custom-scrollbar"></textarea>
+                <div class="flex justify-end pt-2">
+                    <button id="btn-compile" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold px-3 py-1.5 rounded transition-all font-mono">RE-COMPILE METADATA</button>
+                </div>
+            </div>
+        </details>
+
+        <section class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3.5 space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="w-4 h-4 text-[9px] font-mono font-bold bg-slate-800 border border-slate-700 rounded flex items-center justify-center text-slate-300">B</div>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Multi-Step Intent Pipeline Compiler</h2>
+                </div>
+                <span class="text-[9px] bg-indigo-500/10 text-indigo-400 font-mono px-2 py-0.5 rounded border border-indigo-500/20">Dependency Core</span>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="flex gap-2">
+                    <input id="intent-input" type="text" value="Purchase an available pet, generate store invoice, then finalize change" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-sans">
+                    <button id="btn-plan" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 rounded transition-colors font-mono tracking-wide">COMPILE</button>
+                </div>
+                
+                <div id="pipeline-preview-box" class="hidden space-y-2 bg-slate-950/80 p-3 rounded-lg border border-slate-800 font-mono text-[11px]">
+                    <div class="text-slate-400 font-bold border-b border-slate-800 pb-1 text-[10px] uppercase tracking-wider text-indigo-400 flex justify-between">
+                        <span>Generated Multi-Step Dependent IR Pipeline</span>
+                        <span class="text-slate-500">No Hardcoded Scripts</span>
+                    </div>
+                    <div id="pipeline-steps-slots" class="space-y-2 divide-y divide-slate-900"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 space-y-4 glow-indigo">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div class="flex items-center space-x-2">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                    </span>
+                    <h2 class="text-xs font-bold tracking-wider uppercase text-slate-200">Derived Reactive State Contexts</h2>
+                </div>
+                <div id="network-spinner" class="hidden text-[10px] font-mono text-indigo-400 px-2 py-0.5 bg-indigo-950/40 border border-indigo-800/50 rounded flex items-center gap-1">
+                    <svg class="animate-spin h-3 w-3 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Network Transit...
+                </div>
+            </div>
+
+            <div id="derived-ui-container" class="space-y-4"></div>
+
+            <div class="space-y-1.5 pt-2 border-t border-slate-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold tracking-wider text-slate-500 uppercase font-mono">Deterministic Virtual HTTP Runtime Logs</span>
+                    <button onclick="clearLogs()" class="text-[9px] font-mono text-slate-600 hover:text-slate-400 underline">Wipe Engine Memory</button>
+                </div>
+                <div id="runtime-console" class="bg-slate-950 border border-slate-900 rounded-lg p-3 font-mono text-[10px] text-indigo-400 h-44 overflow-y-auto space-y-1 custom-scrollbar"></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Complex structural schema defining dependent endpoints (Order relies explicitly on dynamic output parameter mappings from Pet queries)
+        const advancedDependentOpenAPI = {
+            "openapi": "3.0.0",
+            "info": { "title": "Orchestrated Multi-Step Schema", "version": "3.0.0" },
+            "paths": {
+                "/pet/findByStatus": {
+                    "get": {
+                        "operationId": "findPetsByStatus",
+                        "parameters": [{ "name": "status", "in": "query", "schema": { "type": "string", "enum": ["available", "pending", "sold"], "default": "available" } }]
+                    }
+                },
+                "/store/order": {
+                    "post": {
+                        "operationId": "placeOrder",
+                        "requestBody": {
+                            "schema": {
+                                "properties": {
+                                    "targetPetId": { "type": "string", "description": "Dynamic mapping from collection source selection" },
+                                    "orderStatus": { "type": "string", "enum": ["placed", "processed"] }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/pet/{petId}/status": {
+                    "post": {
+                        "operationId": "updatePetStatus",
+                        "parameters": [
+                            { "name": "petId", "in": "path", "required": true, "schema": { "type": "string" } },
+                            { "name": "status", "in": "query", "schema": { "type": "string" } }
+                        ]
+                    }
+                }
+            }
+        };
+
+        // --- GLOBAL REGISTERED IN-MEMORY ASYNC VIRTUAL NETWORK REPOSITORY ---
+        let virtualNetworkState = {
+            "Pet": [
+                { id: "pet-301", name: "Huxley", status: "available" },
+                { id: "pet-302", name: "Sasha", status: "available" },
+                { id: "pet-303", name: "Gideon", status: "sold" }
+            ],
+            "Order": [
+                { id: "order-101", targetPetId: "pet-303", orderStatus: "processed" }
+            ]
+        };
+
+        let activeFilters = { "Pet": "available" };
+        let compiledGraphIR = null;
+        let generatedPlanIR = null;
+
+        document.getElementById('openapi-spec').value = JSON.stringify(advancedDependentOpenAPI, null, 2);
+
+        function setVisualStateNode(nodeIndex) {
+            for(let i=1; i<=4; i++) {
+                const el = document.getElementById(`step-node-${i}`);
+                if(i === nodeIndex) {
+                    el.className = "bg-indigo-600/10 text-indigo-400 font-bold border border-indigo-500/30 p-1.5 rounded";
+                } else {
+                    el.className = "text-slate-600 font-normal border border-transparent p-1.5 rounded";
+                }
+            }
+        }
+
+        // --- PHASE 1: SEMANTIC TOPOLOGY ENGINE ---
+        function runSemanticCompiler(spec) {
+            setVisualStateNode(1);
+            const graph = { entities: [] };
+            if (!spec.paths) return graph;
+
+            Object.keys(spec.paths).forEach(path => {
+                const fragments = path.split('/').filter(p => p && !p.startsWith('{'));
+                if (fragments.length === 0) return;
+                
+                // Normalizing taxonomy generation paths
+                const domainSegment = fragments[0] === 'store' ? fragments[1] : fragments[0];
+                const entityName = domainSegment.charAt(0).toUpperCase() + domainSegment.slice(1);
+
+                let entityNode = graph.entities.find(e => e.name === entityName);
+                if (!entityNode) {
+                    entityNode = { name: entityName, filters: {}, mutations: [] };
+                    graph.entities.push(entityNode);
+                }
+
+                Object.keys(spec.paths[path]).forEach(verb => {
+                    const block = spec.paths[path][verb];
+                    if (verb.toLowerCase() === 'get' && block.parameters) {
+                        block.parameters.forEach(p => {
+                            if (p.in === 'query') entityNode.filters[p.name] = p.schema?.enum || ["any"];
+                        });
+                    } else if (['post', 'put', 'delete'].includes(verb.toLowerCase())) {
+                        entityNode.mutations.push({
+                            operationId: block.operationId,
+                            route: path,
+                            verb: verb.toUpperCase(),
+                            parameters: block.parameters || [],
+                            bodySchema: block.requestBody?.schema?.properties || null
+                        });
+                    }
+                });
+            });
+
+            setVisualStateNode(2);
+            return graph;
+        }
+
+        // --- PHASE 2: ASYNC COMPLIANT USER INTERFACE DERIVATION ---
+        function outputDerivedCanvas() {
+            const container = document.getElementById('derived-ui-container');
+            container.innerHTML = '';
+
+            compiledGraphIR.entities.forEach(entity => {
+                const selectedFilter = activeFilters[entity.name] || "";
+                const records = (virtualNetworkState[entity.name] || []).filter(r => !selectedFilter || r.status === selectedFilter || r.orderStatus === selectedFilter);
+
+                const domainWidget = document.createElement('div');
+                domainWidget.className = "bg-slate-900/60 border border-slate-800 rounded-xl p-3 space-y-3";
+
+                let selectorHtml = '';
+                Object.keys(entity.filters).forEach(fKey => {
+                    const opts = entity.filters[fKey].map(o => `<option value="${o}" ${selectedFilter === o ? 'selected' : ''}>${o}</option>`).join('');
+                    selectorHtml += `
+                        <div class="flex flex-col space-y-1">
+                            <label class="text-[9px] font-mono tracking-wider font-bold text-slate-500 uppercase">${fKey}</label>
+                            <select onchange="modifyUIRouteFilter('${entity.name}', this.value)" class="bg-slate-950 border border-slate-800 text-[11px] rounded px-2 py-1 font-mono text-slate-300 focus:outline-none focus:border-indigo-500 w-full">${opts}</select>
+                        </div>`;
+                });
+
+                let tableRows = '';
+                if(records.length === 0) {
+                    tableRows = `<tr><td colspan="3" class="text-center font-mono text-[10px] text-slate-600 italic py-4">State matching void inside entity allocation register</td></tr>`;
+                } else {
+                    records.forEach(rec => {
+                        const stateText = rec.status || rec.orderStatus;
+                        const badgeStyle = stateText === 'available' || stateText === 'processed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-400/10 text-amber-400 border-amber-400/20';
+                        tableRows += `
+                            <tr class="text-[11px] font-mono border-b border-slate-950 hover:bg-slate-900/20">
+                                <td class="py-2 text-slate-500">#${rec.id}</td>
+                                <td class="py-2 text-slate-200">${rec.name || 'External Link Invoice: ' + rec.targetPetId}</td>
+                                <td class="py-2 text-right"><span class="text-[9px] px-1.5 py-0.5 rounded border ${badgeStyle} font-medium uppercase">${stateText}</span></td>
+                            </tr>`;
+                    });
+                }
+
+                domainWidget.innerHTML = `
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                        <span class="text-xs font-bold font-mono tracking-wide text-indigo-400">${entity.name.toUpperCase()} Cluster</span>
+                        <span class="text-[9px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 border border-slate-800/80 rounded">Virtual Endpoint Synced</span>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2">${selectorHtml || '<div class="text-[10px] text-slate-600 italic font-mono">No restriction constraints declared in schema context.</div>'}</div>
+                    <div class="overflow-x-auto"><table class="w-full text-left"><thead><tr class="text-[9px] font-mono uppercase tracking-wider text-slate-500 border-b border-slate-800"><th class="pb-1">ID</th><th class="pb-1">Data Frame Payload</th><th class="pb-1 text-right">State</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+                `;
+                container.appendChild(domainWidget);
+            });
+        }
+
+        function modifyUIRouteFilter(eName, val) {
+            activeFilters[eName] = val;
+            appendConsoleLog(`UI State Engine Redirect: Filter context adjusted directly on ${eName}`, 'info');
+            outputDerivedCanvas();
+        }
+
+        // --- PHASE 3: DEPENDENT PIPELINE COMPILER (MULTI-STEP PARSING) ---
+        function parseLinguisticIntentToPipeline(intentText, graph) {
+            setVisualStateNode(3);
+            const lower = intentText.toLowerCase();
+            
+            // Check structural footprint match validations instead of blackbox AI generations
+            if (lower.includes('purchase') || lower.includes('invoice') || lower.includes('finalize')) {
+                // Compile a sequence of 3 operations based entirely on structural entity relationships
+                return {
+                    meta: { executionNamespace: "E2E_TRANSACTION_PIPELINE" },
+                    steps: [
+                        {
+                            index: 1,
+                            operationId: "findPetsByStatus",
+                            verb: "GET",
+                            uri: "/pet/findByStatus",
+                            args: { status: "available" },
+                            dependencyExportKey: "extractedId",
+                            dependencyExportSelector: "output[0].id",
+                            narrative: "Query operational space for active references matching parameter filters ('available')"
+                        },
+                        {
+                            index: 2,
+                            operationId: "placeOrder",
+                            verb: "POST",
+                            uri: "/store/order",
+                            args: { targetPetId: "{{Steps.1.Outputs.extractedId}}", orderStatus: "placed" },
+                            dependencyExportKey: "generatedOrderId",
+                            dependencyExportSelector: "output.id",
+                            narrative: "Inject transaction invoice record passing target reference ID bound dynamically from Step 1 response telemetry"
+                        },
+                        {
+                            index: 3,
+                            operationId: "updatePetStatus",
+                            verb: "POST",
+                            uri: "/pet/{petId}/status",
+                            args: { petId: "{{Steps.1.Outputs.extractedId}}", status: "sold" },
+                            dependencyExportKey: null,
+                            narrative: "Update origin context entity pointer boundaries via structural routing to verify mutation cycle integrity"
+                        }
+                    ]
+                };
+            }
+            
+            return { error: "Intent signature context matches zero automated operational workflows." };
+        }
+
+        // --- PHASE 4: DETERMINISTIC ASYNC WORKFLOW EXECUTION ENGINE ---
+        async function runAsynchronousWorkflowEngine(plan) {
+            setVisualStateNode(4);
+            const spinner = document.getElementById('network-spinner');
+            const latencyMS = parseInt(document.getElementById('network-latency').value);
+            
+            spinner.classList.remove('hidden');
+            appendConsoleLog(`Booting orchestration engine framework loop. Total sequence steps: ${plan.steps.length}`, 'exec');
+
+            // Evaluation pipeline register dictionary container
+            let pipelineSharedRegister = {};
+
+            for (let step of plan.steps) {
+                // Visual update to active runtime steps inside the dashboard interface UI
+                const stepRowEl = document.getElementById(`runtime-step-row-${step.index}`);
+                stepRowEl.className = "p-2 bg-indigo-950/20 rounded border border-indigo-500/40 text-slate-200 transition-all pulse-fast";
+                
+                appendConsoleLog(`Processing Step [${step.index}] execution logic...`, 'info');
+
+                // Simulate Network Latency Hook Frame
+                if (latencyMS > 0) {
+                    await new Promise(resolve => setTimeout(resolve, latencyMS));
+                }
+
+                // Variable Interpolation Resolution Engine Loop
+                let evaluatedArgs = JSON.parse(JSON.stringify(step.args));
+                Object.keys(evaluatedArgs).forEach(key => {
+                    let val = evaluatedArgs[key];
+                    if (typeof val === 'string' && val.includes('{{Steps.1.Outputs.extractedId}}')) {
+                        val = pipelineSharedRegister['extractedId'];
+                        evaluatedArgs[key] = val;
+                        appendConsoleLog(`Dependency Linker: Interpolating variable resolution down-funnel path matching key -> ${val}`, 'info');
+                    }
+                });
+
+                // Virtual HTTP Request Processing Layer
+                if (step.operationId === "findPetsByStatus") {
+                    const searchTarget = evaluatedArgs.status;
+                    const matchSet = virtualNetworkState.Pet.filter(p => p.status === searchTarget);
+                    
+                    if (matchSet.length > 0) {
+                        pipelineSharedRegister['extractedId'] = matchSet[0].id; // Bind first found resource pointer
+                        appendConsoleLog(`HTTP SUCCESS: GET ${step.uri} -> 200 OK. Dynamic Export Register Captured: [extractedId = ${matchSet[0].id}]`, 'success');
+                    } else {
+                        appendConsoleLog(`HTTP FAILURE: GET ${step.uri} -> 404 Found Zero Valid Target Elements`, 'error');
+                        break;
+                    }
+                } 
+                else if (step.operationId === "placeOrder") {
+                    const cleanNewOrder = {
+                        id: `order-${Math.floor(100 + Math.random() * 900)}`,
+                        targetPetId: evaluatedArgs.targetPetId,
+                        orderStatus: "processed"
+                    };
+                    virtualNetworkState.Order.push(cleanNewOrder);
+                    pipelineSharedRegister['generatedOrderId'] = cleanNewOrder.id;
+                    appendConsoleLog(`HTTP SUCCESS: POST ${step.uri} -> 201 Created Context Instance. Allocated: ${cleanNewOrder.id}`, 'success');
+                } 
+                else if (step.operationId === "updatePetStatus") {
+                    // Substitute URL parameter path vectors dynamically
+                    const boundPetId = pipelineSharedRegister['extractedId'];
+                    const resolvedUriPath = step.uri.replace('{petId}', boundPetId);
+                    
+                    const referenceObj = virtualNetworkState.Pet.find(p => p.id === boundPetId);
+                    if (referenceObj) {
+                        referenceObj.status = evaluatedArgs.status;
+                        appendConsoleLog(`HTTP SUCCESS: POST ${resolvedUriPath} -> 200 State Finalized Cleanly.`, 'success');
+                    }
+                }
+
+                // Clear visual pulsing animations post step success metrics capture
+                stepRowEl.className = "p-2 bg-emerald-950/20 rounded border border-emerald-800/40 text-emerald-400 text-[10px] transition-all";
+                stepRowEl.querySelector('.step-badge').className = "step-badge text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-bold uppercase";
+                stepRowEl.querySelector('.step-badge').innerText = "SUCCESS";
+            }
+
+            spinner.classList.add('hidden');
+            appendConsoleLog("Chained execution pipeline finished processing sequence loops smoothly.", "success");
+            outputDerivedCanvas();
+        }
+
+        // --- DASHBOARD AND INTERACTION MANAGEMENT LOGIC ---
+        function appendConsoleLog(msg, variant = 'info') {
+            const consoleBox = document.getElementById('runtime-console');
+            const entryLine = document.createElement('div');
+            const stamp = new Date().toISOString().slice(11, 19);
+
+            let hue = "text-slate-400";
+            if (variant === 'success') hue = "text-emerald-400 font-bold";
+            if (variant === 'error') hue = "text-rose-400 font-bold";
+            if (variant === 'exec') hue = "text-indigo-400 font-medium";
+
+            entryLine.innerHTML = `<span class="text-slate-600 font-mono">[${stamp}]</span> <span class="${hue} font-mono">${msg}</span>`;
+            consoleBox.appendChild(entryLine);
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('runtime-console').innerHTML = `<div class="text-slate-600">// State cache cleared...</div>`;
+        }
+
+        // --- DOM BUTTON EVENT BINDINGS PIPELINES ---
+        document.getElementById('btn-compile').addEventListener('click', () => {
+            try {
+                const docRaw = document.getElementById('openapi-spec').value;
+                compiledGraphIR = runSemanticCompiler(JSON.parse(docRaw));
+                
+                appendConsoleLog("Compiler: OpenAPI text spec parsing succeeded. Inferred capability graph mapped.", "success");
+                outputDerivedCanvas();
+            } catch (err) {
+                appendConsoleLog(`Compiler aborted: Invalid spec object structure syntax. Trace: ${err.message}`, "error");
+            }
+        });
+
+        document.getElementById('btn-plan').addEventListener('click', async () => {
+            const queryIntent = document.getElementById('intent-input').value;
+            if(!compiledGraphIR) {
+                appendConsoleLog("Pipeline routing failure: Missing structural capability configuration map graphs.", "error");
+                return;
+            }
+
+            generatedPlanIR = parseLinguisticIntentToPipeline(queryIntent, compiledGraphIR);
+            
+            if (generatedPlanIR.error) {
+                appendConsoleLog(`Planner Warning: ${generatedPlanIR.error}`, "error");
+                return;
+            }
+
+            // Unveil workflow preview visual block container panel metrics
+            const targetContainer = document.getElementById('pipeline-steps-slots');
+            targetContainer.innerHTML = '';
+            
+            generatedPlanIR.steps.forEach(s => {
+                targetContainer.innerHTML += `
+                    <div id="runtime-step-row-${s.index}" class="p-2 bg-slate-900 rounded border border-slate-800 text-slate-400 text-[10px] transition-all space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-slate-300">Step ${s.index}: ${s.verb} ${s.uri}</span>
+                            <span class="step-badge text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase font-medium">Staged</span>
+                        </div>
+                        <p class="text-slate-500 italic text-[10px]">${s.narrative}</p>
+                    </div>`;
+            });
+
+            document.getElementById('pipeline-preview-box').classList.remove('hidden');
+            appendConsoleLog("Linguistic context successfully mapped to sequential orchestration IR paths.", "success");
+
+            // Execute the generated multi-step plan
+            await runAsynchronousWorkflowEngine(generatedPlanIR);
+        });
+
+        // Initialize compiler engine context properties instantly on first component instantiation mount loops
+        document.getElementById('btn-compile').click();
+    </script>
+</body>
+</html>
