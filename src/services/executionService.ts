@@ -1,112 +1,179 @@
-import { type jdCard } from "../types";
+import { type JDCard, type ExecutionNode } from "../types";
 import { mockDataService } from "./mockDataService";
 
 export const executionService = {
-  async executeNode(node: any, writeEnabled: boolean): Promise<any> {
-    const isMutation = !node.capability.isRead;
-    
-    if (isMutation && !writeEnabled) {
-      throw new Error(`MUTATION_BLOCKED: Write mode disabled for ${node.id}`);
+  async runGraph(jdCard: JDCard, writeEnabled: boolean, onProgress?: (stepId: string, result: any) => void): Promise<Record<string, any>> {
+    const results: Record<string, any> = {};
+    let currentNodeId: string | 'END' = jdCard.executionGraph.rootNode;
+
+    while (currentNodeId !== 'END') {
+      const node = jdCard.executionGraph.nodes[currentNodeId];
+      if (!node) break;
+
+      try {
+        const resolvedParams = this.resolveBindings(node.parameters, results);
+        
+        let result: any;
+        if (node.iterator) {
+          const list = this.resolveValue(node.iterator, results) || [];
+          result = await Promise.all(list.map(async (item: any) => {
+            const iterParams = { ...resolvedParams, ...this.resolveBindings(node.parameters, { iterator: { item } }) };
+            return this.executeRequest(node, iterParams, writeEnabled);
+          }));
+        } else {
+          result = await this.executeRequest(node, resolvedParams, writeEnabled);
+        }
+
+        results[currentNodeId] = { data: result, node };
+        onProgress?.(currentNodeId, result);
+
+        currentNodeId = node.onSuccess as any;
+      } catch (err: any) {
+        console.error(`Node ${currentNodeId} failed:`, err);
+        if (node.onFailure === 'TRIGGER_SAGA_ROLLBACK') {
+          await this.rollback(jdCard, results, writeEnabled);
+          throw new Error(`Execution halted. Saga rollback triggered: ${err.message}`);
+        }
+        currentNodeId = node.onFailure as any || 'END';
+      }
     }
 
-    const { url, method, bodyParams } = this.resolveUrlAndMethod(node);
-    
-    try {
-      // Use the backend proxy to avoid CORS issues
-      const response = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url,
-          method,
-          body: method !== 'GET' ? bodyParams : undefined
-        })
-      });
+    return results;
+  },
 
-      const text = await response.text();
-      const contentType = response.headers.get('content-type');
-      let data: any;
-
-      if (contentType?.includes('application/json')) {
+  async rollback(jdCard: JDCard, results: Record<string, any>, writeEnabled: boolean) {
+    console.warn("SAGA_ROLLBACK_INITIATED");
+    const nodeIds = Object.keys(results).reverse();
+    for (const id of nodeIds) {
+      const node = jdCard.executionGraph.nodes[id];
+      if (node?.compensation) {
+        console.log(`Executing compensation for ${id}`);
         try {
-          data = JSON.parse(text);
+          const compParams = this.resolveBindings(node.compensation.parameters, results);
+          await this.executeRequest({ 
+            verb: node.compensation.verb, 
+            path: node.compensation.path,
+            capability: node.capability 
+          } as any, compParams, writeEnabled);
         } catch (e) {
-          data = { message: text };
+          console.error(`Compensation failed for ${id}:`, e);
         }
-      } else {
-        data = { message: text };
       }
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || `HTTP ${response.status} from ${url}`);
-      }
-
-      return data;
-    } catch (err: any) {
-      console.error("Execution Error:", err);
-      throw err;
     }
   },
 
-  resolveUrlAndMethod(node: any) {
-    let url = node.capability.path;
-    const method = node.capability.method;
-    const allParams = { ...(node.input || {}), ...(node.bindings || {}) };
-    const usedParams = new Set<string>();
-
-    // Resolve path parameters: /user/{username} -> /user/ben
-    if (url.includes('{')) {
-      const pathParams = url.match(/\{([^}]+)\}/g);
-      pathParams?.forEach(placeholder => {
-        const key = placeholder.replace(/[{}]/g, '');
-        usedParams.add(key);
-        if (allParams[key] !== undefined) {
-          url = url.replace(placeholder, encodeURIComponent(String(allParams[key])));
-        } else {
-          // Fallback to mock value if missing
-          const paramSchema = node.capability.inputSchema?.properties?.[key] || { type: 'string' };
-          const mockVal = mockDataService.generateObject(paramSchema);
-          url = url.replace(placeholder, encodeURIComponent(String(mockVal)));
-        }
-      });
+  async executeRequest(node: ExecutionNode, params: any, writeEnabled: boolean): Promise<any> {
+    if (node.type === 'MUTATION' && !writeEnabled) {
+      throw new Error("MUTATION_BLOCKED: Read-only mode.");
     }
 
-    // Handle Query Parameters for GET requests
-    if (method === 'GET') {
-      const queryParams = new URLSearchParams();
-      Object.entries(allParams).forEach(([key, value]) => {
-        if (!usedParams.has(key) && value !== undefined) {
-          if (Array.isArray(value)) {
-            value.forEach(v => queryParams.append(key, String(v)));
-          } else {
-            queryParams.append(key, String(value));
-          }
-        }
-      });
-      const queryString = queryParams.toString();
-      if (queryString) {
-        url += (url.includes('?') ? '&' : '?') + queryString;
-      }
-    }
-
-    // Determine body parameters (anything not used in URL)
-    let bodyParams: any = undefined;
-    if (method !== 'GET' && method !== 'HEAD') {
-      if (allParams['_body'] !== undefined) {
-        bodyParams = allParams['_body'];
-      } else {
-        const filtered: Record<string, any> = {};
-        let hasBody = false;
-        Object.entries(allParams).forEach(([key, value]) => {
-          if (!usedParams.has(key) && key !== '_body') {
-            filtered[key] = value;
-            hasBody = true;
-          }
-        });
-        if (hasBody) bodyParams = filtered;
-      }
-    }
+    const satisfiedParams = this.satisfyParameters(node, params);
+    const { url, method, body } = this.buildRequest(node, satisfiedParams);
     
-    return { url, method, bodyParams };
+    const response = await fetch('/api/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, method, body })
+    });
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = { error: text };
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Execution failed: ${response.status}`);
+    }
+    return data;
+  },
+
+  satisfyParameters(node: ExecutionNode, params: any): any {
+    const satisfied = { ...params };
+    const schema = node.capability?.inputSchema;
+    if (!schema) return satisfied;
+
+    const required = schema.required || [];
+    required.forEach((key: string) => {
+      if (satisfied[key] === undefined || satisfied[key] === null || satisfied[key] === '') {
+        const prop = schema.properties?.[key];
+        
+        // 1. Check for defaults
+        if (prop?.default !== undefined) {
+          satisfied[key] = prop.default;
+        } 
+        // 2. Check for enums
+        else if (prop?.enum && prop.enum.length > 0) {
+          satisfied[key] = prop.enum[0];
+        }
+        // 3. Hardcoded heuristics for common Petstore/API patterns
+        else if (key === 'status') {
+          satisfied[key] = 'available';
+        }
+        else if (key === 'tags') {
+          satisfied[key] = ['tag1'];
+        }
+        // 4. Fallback to mock generation
+        else if (prop) {
+          satisfied[key] = mockDataService.generateField(key, prop);
+        }
+      }
+    });
+
+    return satisfied;
+  },
+
+  buildRequest(node: ExecutionNode, params: any) {
+    let url = node.path || node.capability?.path || "";
+    const method = node.verb || node.capability?.method || "GET";
+    const used = new Set<string>();
+
+    // Path params
+    if (url.includes('{')) {
+      url = url.replace(/\{([^}]+)\}/g, (match, key) => {
+        used.add(key);
+        return encodeURIComponent(String(params[key] || ""));
+      });
+    }
+
+    // Query vs Body
+    const query = new URLSearchParams();
+    const body: any = {};
+    let hasBody = false;
+
+    Object.entries(params).forEach(([k, v]) => {
+      if (used.has(k)) return;
+      if (method === 'GET') {
+        query.append(k, String(v));
+      } else {
+        body[k] = v;
+        hasBody = true;
+      }
+    });
+
+    const qs = query.toString();
+    if (qs) url += (url.includes('?') ? '&' : '?') + qs;
+
+    return { url, method, body: hasBody ? body : undefined };
+  },
+
+  resolveBindings(bindings: Record<string, any>, context: any): any {
+    const resolved: any = {};
+    for (const [key, val] of Object.entries(bindings)) {
+      if (typeof val === 'string' && val.startsWith('{{') && val.endsWith('}}')) {
+        resolved[key] = this.resolveValue(val.slice(2, -2), context);
+      } else if (typeof val === 'object' && val !== null) {
+        resolved[key] = this.resolveBindings(val, context);
+      } else {
+        resolved[key] = val;
+      }
+    }
+    return resolved;
+  },
+
+  resolveValue(path: string, context: any): any {
+    return path.split('.').reduce((obj, key) => obj?.[key], context);
   }
 };

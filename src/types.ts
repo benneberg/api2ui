@@ -10,62 +10,77 @@ export interface Capability {
   safetyClassification: 'READ_ONLY' | 'MUTATES_DATA' | 'REQUIRES_AUTH';
 }
 
-export interface Intent {
+export interface IntentMap {
   goal: string;
-  selectedCapabilities: string[];
+  targetEntity?: string;
+  steps: {
+    capabilityId: string;
+    actionType: 'READ' | 'FILTER' | 'TRANSFORM' | 'MUTATE';
+    inferredParams: Record<string, any>;
+  }[];
+}
+
+export interface JDCard {
+  id: string;
+  version: string;
+  metadata: {
+    title: string;
+    targetDomain?: string;
+    compiledAt: string;
+  };
+  capabilitiesMode: 'READ_ONLY' | 'WRITE_SESSION_REQUIRED' | 'WRITE_ALLOWED';
+  contracts: {
+    inboundIntent: string;
+    expectedEntity: string;
+  };
+  executionGraph: {
+    rootNode: string;
+    nodes: Record<string, ExecutionNode>;
+  };
+  uiProjection: {
+    layout: 'SINGLE_PAGE' | 'STEPPER' | 'DASHBOARD' | 'vertical-stack';
+    components: UIComponentSchema[];
+    componentRegistryVersion: string;
+  };
 }
 
 export interface ExecutionNode {
   id: string;
-  capabilityId: string;
-  capability: Capability;
-  type: 'READ' | 'MUTATION';
+  operationId?: string;
+  verb: string;
+  path?: string;
+  type?: 'READ' | 'MUTATION' | 'TRANSFORM' | 'LOCAL_LOG';
+  capability?: Capability; // Reference to original capability definition
+  parameters: Record<string, any>;
+  exports?: Record<string, string>; // name -> path in response
+  onSuccess: string | 'END' | 'TRIGGER_SAGA_ROLLBACK';
+  onFailure: string | 'END' | 'TRIGGER_SAGA_ROLLBACK' | null;
+  compensation?: {
+    verb: string;
+    path: string;
+    parameters: Record<string, any>;
+  };
+  iterator?: string; // If this node should iterate over a previous export
+}
+
+export interface UIComponentSchema {
+  id: string;
+  type: 'TABLE' | 'FILTER_BAR' | 'ACTION_PANEL' | 'DIFF_VIEW' | 'CHART' | 'FORM' | 'STATUS_LOG' | 'Metric-Card' | 'Data-Table' | 'Action-Trigger-Button';
+  title?: string;
   bindings: Record<string, any>;
-  input?: Record<string, any>;
+  properties?: Record<string, any>;
+  events?: Record<string, string>;
+  bindsTo?: string; // For legacy compatibility or simplified mapping
 }
 
-export interface ExecutionEdge {
-  from: string;
-  to: string;
-}
-
-export interface jdCard {
-  version: string;
-  intent: Intent;
-  capabilities: {
-    mode: 'READ_ONLY' | 'WRITE_ALLOWED';
-    requiredEndpoints: string[];
-  };
-  execution: {
-    nodes: ExecutionNode[];
-    edges: ExecutionEdge[];
-  };
-  ui: {
-    layout: any[];
-    componentRegistryVersion: string;
-  };
-  metadata: {
-    specUrl: string;
-    createdAt: string;
-  };
-}
-
-export type ViewType = 'spec' | 'intent' | 'plan' | 'test' | 'lab' | 'preview' | 'library';
+export type ViewType = 'spec' | 'intent' | 'plan' | 'test' | 'preview' | 'lab';
 
 export type AIProvider = 'gemini' | 'openrouter' | 'groq';
-
-export interface TestResult {
-  capabilityId: string;
-  status: 'SUCCESS' | 'FAILURE' | 'PENDING';
-  latency: number;
-  statusCode?: number;
-  error?: string;
-}
 
 export interface Project {
   id: string;
   name: string;
-  jdCard: jdCard | null;
+  jdCard: JDCard | null;
   updatedAt: string;
 }
 
@@ -82,4 +97,12 @@ export interface RepairReport {
   timestamp: string;
   issues: RepairIssue[];
   fixedIssues: number;
+}
+
+export interface TestResult {
+  capabilityId: string;
+  status: 'SUCCESS' | 'FAILURE';
+  latency: number;
+  statusCode?: number;
+  error?: string;
 }

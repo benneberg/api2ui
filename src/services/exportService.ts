@@ -1,19 +1,19 @@
-import { type jdCard } from "../types";
+import { type JDCard } from "../types";
 
 class ExportService {
-  downloadAsJson(jdCard: jdCard) {
+  downloadAsJson(jdCard: JDCard) {
     const blob = new Blob([JSON.stringify(jdCard, null, 2)], { type: 'application/json' });
     this.triggerDownload(blob, `jdcard-${new Date().getTime()}.json`);
   }
 
-  downloadAsHtml(jdCard: jdCard) {
+  downloadAsHtml(jdCard: JDCard) {
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API2UI Projection Bundle: ${jdCard.intent.goal}</title>
+    <title>API2UI Bundle: ${jdCard.metadata.title}</title>
     <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Inter:wght@400;500;700&family=Cormorant+Garamond:ital,wght@1,400&display=swap');
@@ -32,13 +32,13 @@ class ExportService {
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold tracking-tighter uppercase leading-none">PORTABLE_BUNDLE</h1>
-                    <span class="mono text-[10px] uppercase text-gray-500 tracking-widest">Projection Artifact v1.0</span>
+                    <h1 class="text-xl font-bold tracking-tighter uppercase leading-none">${jdCard.metadata.title.toUpperCase()}</h1>
+                    <span class="mono text-[10px] uppercase text-gray-500 tracking-widest">jdCard Artifact v1.0</span>
                 </div>
             </div>
             <div class="flex items-center gap-4">
                 <button id="runBtn" class="bg-brand-ink text-white font-bold px-6 py-2 uppercase text-[11px] tracking-widest hover:bg-brand-accent transition-all shadow-[4px_4px_0_0_#121212] active:translate-y-1 active:shadow-none">
-                    Run Sequence
+                    Execute Graph
                 </button>
             </div>
         </div>
@@ -50,32 +50,32 @@ class ExportService {
             <aside class="space-y-8">
                 <section>
                     <h2 class="serif italic text-3xl mb-4">Intention</h2>
-                    <p class="text-sm font-medium leading-relaxed text-gray-600">${jdCard.intent.goal}</p>
+                    <p class="text-sm font-medium leading-relaxed text-gray-600">${jdCard.contracts.inboundIntent}</p>
                 </section>
 
                 <section class="space-y-4">
-                    <span class="block px-2 py-1 bg-brand-ink text-white font-mono text-[9px] uppercase tracking-widest w-fit">Execution_Graph</span>
+                    <span class="block px-2 py-1 bg-brand-ink text-white font-mono text-[9px] uppercase tracking-widest w-fit">Execution_DAG</span>
                     <div id="graphNodes" class="space-y-2">
-                        ${jdCard.execution.nodes.map(node => `
+                        ${Object.values(jdCard.executionGraph.nodes).map(node => `
                             <div class="p-3 border-2 border-brand-line bg-white text-[11px] font-mono flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full ${node.capability.isRead ? 'bg-blue-500' : 'bg-red-500'}"></span>
+                                <span class="w-2 h-2 rounded-full ${node.type === 'READ' ? 'bg-blue-500' : 'bg-red-500'}"></span>
                                 <span class="flex-1 truncate">${node.id}</span>
-                                <span class="text-[8px] opacity-40 uppercase">${node.capability.safetyClassification || 'UNKNOWN'}</span>
+                                <span class="text-[8px] opacity-40 uppercase">${node.verb}</span>
                             </div>
                         `).join('')}
                     </div>
                 </section>
 
                 <section class="bg-white border-2 border-brand-ink p-4 shadow-[4px_4px_0_0_#D1D1D1]">
-                    <h3 class="mono text-[10px] font-bold uppercase mb-2">Security_Protocol</h3>
+                    <h3 class="mono text-[10px] font-bold uppercase mb-2">Capabilities_Policy</h3>
                     <div class="space-y-1">
                         <div class="flex items-center justify-between text-[9px] mono">
                             <span>MODE</span>
-                            <span class="text-brand-accent">${jdCard.capabilities.mode}</span>
+                            <span class="text-brand-accent">${jdCard.capabilitiesMode}</span>
                         </div>
                         <div class="flex items-center justify-between text-[9px] mono">
-                            <span>SPEC_SOURCE</span>
-                            <span class="truncate ml-4 opacity-50">${jdCard.metadata.specUrl}</span>
+                            <span>COMPILED</span>
+                            <span class="truncate ml-4 opacity-50">${jdCard.metadata.compiledAt}</span>
                         </div>
                     </div>
                 </section>
@@ -85,7 +85,7 @@ class ExportService {
             <div class="md:col-span-2 space-y-12">
                 <!-- Sandbox Status -->
                 <div id="sandboxStatus" class="border-2 border-dashed border-brand-line p-8 text-center bg-white/50">
-                    <p class="font-serif italic text-gray-400">Sequence idle. Initiating runtime required.</p>
+                    <p class="font-serif italic text-gray-400">Execution graph idle. Awaiting user initialization.</p>
                 </div>
 
                 <!-- Projection Surface -->
@@ -96,12 +96,12 @@ class ExportService {
                 <!-- Simulation Logs -->
                 <div class="bg-brand-ink p-6 shadow-[8px_8px_0_0_#121212] flex flex-col h-[200px]">
                     <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
-                        <span class="text-white mono text-[10px] uppercase tracking-widest">Virtual_Console</span>
-                        <span class="text-green-400 mono text-[9px] animate-pulse">● RUNNING_LOCAL</span>
+                        <span class="text-white mono text-[10px] uppercase tracking-widest">Saga_Runtime_View</span>
+                        <span class="text-green-400 mono text-[9px] animate-pulse">● VIRTUAL_RUNTIME_READY</span>
                     </div>
                     <div id="logs" class="flex-1 overflow-y-auto no-scrollbar font-mono text-[10px] text-gray-400 space-y-1">
-                        <div class="text-gray-600">[RUNTIME_INIT] Warming up simulation core...</div>
-                        <div class="text-gray-600">[ARTIFACT_MOUNT] Artifact bundle detected.</div>
+                        <div class="text-gray-600">[SYSTEM] Saga core initialized.</div>
+                        <div class="text-gray-600">[RESOURCES] Graph nodes mapped to projection surface.</div>
                     </div>
                 </div>
             </div>
@@ -126,52 +126,52 @@ class ExportService {
 
         function renderProjection(results) {
             projectionSurface.innerHTML = '';
-            results.forEach(res => {
+            // Simplified UI Engine for Standalone
+            jdCard.uiProjection.components.forEach(comp => {
                 const section = document.createElement('div');
                 section.className = 'space-y-4';
                 
                 const header = document.createElement('div');
                 header.className = 'flex items-center gap-3 border-b-2 border-brand-ink pb-2';
                 header.innerHTML = \`
-                    <span class="font-mono text-xs font-bold uppercase">\${res.endpoint}</span>
-                    <span class="ml-auto flex items-center gap-2 px-2 py-0.5 bg-green-100 text-green-700 font-mono text-[9px] rounded">200_OK</span>
+                    <span class="font-mono text-xs font-bold uppercase italic">\${comp.title || comp.id}</span>
+                    <span class="ml-auto px-2 py-0.5 bg-brand-ink text-white font-mono text-[9px] rounded">SIM_PROJECTION</span>
                 \`;
                 section.appendChild(header);
 
-                if (Array.isArray(res.data) && res.data.length > 0) {
-                    const tableContainer = document.createElement('div');
-                    tableContainer.className = 'overflow-x-auto';
-                    const columns = Object.keys(res.data[0]);
-                    
-                    let tableHtml = \`
-                        <table class="w-full border-2 border-brand-ink text-[11px] font-mono">
-                            <thead>
-                                <tr class="bg-brand-ink text-white uppercase tracking-wider italic">
-                                    \${columns.map(h => \`<th class="p-3 text-left border-r border-white/20 last:border-0">\${h}</th>\`).join('')}
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-brand-ink">
-                    \`;
-                    
-                    res.data.forEach(row => {
-                        tableHtml += \`<tr class="hover:bg-blue-50 transition-colors">\`;
-                        columns.forEach(col => {
-                            const val = row[col];
-                            tableHtml += \`<td class="p-3 border-r border-brand-line last:border-0 truncate font-medium">\${typeof val === 'object' ? JSON.stringify(val) : val}</td>\`;
-                        });
-                        tableHtml += \`</tr>\`;
-                    });
-                    
-                    tableHtml += '</tbody></table>';
-                    tableContainer.innerHTML = tableHtml;
-                    section.appendChild(tableContainer);
-                } else {
-                    const pre = document.createElement('pre');
-                    pre.className = 'bg-white border-2 border-brand-ink p-6 font-mono text-xs shadow-[4px_4px_0_0_#D1D1D1] overflow-auto';
-                    pre.textContent = JSON.stringify(res.data, null, 2);
-                    section.appendChild(pre);
-                }
+                const mockData = Array.from({length: 5}, (_, i) => ({
+                    id: 1000 + i,
+                    label: "Mock Row " + (i + 1),
+                    status: i % 2 === 0 ? "STABLE" : "PENDING",
+                    value: Math.floor(Math.random() * 1000)
+                }));
 
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'overflow-x-auto';
+                const columns = Object.keys(mockData[0]);
+                
+                let tableHtml = \`
+                    <table class="w-full border-2 border-brand-ink text-[11px] font-mono">
+                        <thead>
+                            <tr class="bg-brand-ink text-white uppercase tracking-wider italic">
+                                \${columns.map(h => \`<th class="p-3 text-left border-r border-white/20 last:border-0">\${h}</th>\`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-brand-ink/10">
+                \`;
+                
+                mockData.forEach(row => {
+                    tableHtml += \`<tr class="hover:bg-blue-50 transition-colors">\`;
+                    columns.forEach(col => {
+                        const val = row[col];
+                        tableHtml += \`<td class="p-3 border-r border-brand-line last:border-0 truncate font-medium">\${val}</td>\`;
+                    });
+                    tableHtml += \`</tr>\`;
+                });
+                
+                tableHtml += '</tbody></table>';
+                tableContainer.innerHTML = tableHtml;
+                section.appendChild(tableContainer);
                 projectionSurface.appendChild(section);
             });
         }
@@ -179,51 +179,21 @@ class ExportService {
         async function runSimulation() {
             runBtn.disabled = true;
             runBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            sandboxStatus.innerHTML = '<div class="flex items-center justify-center gap-4 font-mono text-xs"><div class="w-4 h-4 border-2 border-brand-ink border-t-transparent rounded-full animate-spin"></div> EXECUTING_SEQUENCE_PLAN...</div>';
+            sandboxStatus.innerHTML = '<div class="flex items-center justify-center gap-4 font-mono text-xs"><div class="w-4 h-4 border-2 border-brand-ink border-t-transparent rounded-full animate-spin"></div> TRAVERSING_EXECUTION_GRAPH...</div>';
             sandboxStatus.classList.remove('hidden');
             projectionSurface.classList.add('hidden');
-            projectionSurface.innerHTML = '';
             
-            const results = [];
-            for (const node of jdCard.execution.nodes) {
-                addLog(\`INITIATING_NODE: \${node.id} (\${node.capability.method})\`, 'text-blue-400');
-                await new Promise(r => setTimeout(r, 800));
-                
-                // Realistic mock generation simplified for standalone
-                const genMock = (s) => {
-                    if (!s) return { id: Math.floor(Math.random() * 1000) };
-                    if (s.type === 'array') {
-                        return Array.from({length: 3}, () => genMock(s.items));
-                    }
-                    if (s.type === 'object' && s.properties) {
-                        const o = {};
-                        Object.keys(s.properties).forEach(k => {
-                            const ps = s.properties[k];
-                            const lowK = k.toLowerCase();
-                            if (lowK.includes('id')) o[k] = Math.floor(Math.random() * 10000);
-                            else if (lowK.includes('name')) o[k] = "Generated " + k;
-                            else if (ps.type === 'number') o[k] = Math.floor(Math.random() * 100);
-                            else if (ps.type === 'boolean') o[k] = Math.random() > 0.5;
-                            else o[k] = "Value_" + k;
-                        });
-                        return o;
-                    }
-                    return "Mock_Value";
-                };
-
-                const mockData = genMock(node.capability.outputSchema);
-
-                results.push({
-                    endpoint: node.capability.path,
-                    data: mockData
-                });
-                
-                addLog(\`NODE_RESOLVED: \${node.id} -> PROJECTION_STATE_RECONCILED\`, 'text-green-500');
-                await new Promise(r => setTimeout(r, 400));
+            let currentNodeId = jdCard.executionGraph.rootNode;
+            while(currentNodeId && currentNodeId !== 'END') {
+                const node = jdCard.executionGraph.nodes[currentNodeId];
+                addLog(\`PROCESSING_NODE: \${currentNodeId} [\${node.verb}]\`, 'text-blue-400');
+                await new Promise(r => setTimeout(r, 600));
+                addLog(\`RESOLVED: \${currentNodeId} -> SUCCESS\`, 'text-green-500');
+                currentNodeId = node.onSuccess === 'END' ? null : node.onSuccess;
             }
 
-            addLog("SIMULATION_COMPLETE: RENDERING_UI_PROJECTION", "text-brand-accent font-bold");
-            renderProjection(results);
+            addLog("FLOW_HALTED: RECONCILING_UI_PROJECTION", "text-brand-accent font-bold");
+            renderProjection();
             
             setTimeout(() => {
                 sandboxStatus.classList.add('hidden');
@@ -235,7 +205,7 @@ class ExportService {
 
         runBtn.addEventListener('click', runSimulation);
 
-        addLog("SYSTEM_READY: Await user sequence trigger.");
+        addLog("SYSTEM_READY: Initialized virtual saga engine.");
     <\/script>
 </body>
 </html>`;

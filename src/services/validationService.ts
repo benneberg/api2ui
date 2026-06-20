@@ -7,54 +7,50 @@ addFormats(ajv);
 export const jdCardSchema = {
   type: "object",
   properties: {
+    id: { type: "string" },
     version: { type: "string" },
-    intent: {
-      type: "object",
-      properties: {
-        goal: { type: "string" },
-        selectedCapabilities: { type: "array", items: { type: "string" } }
-      },
-      required: ["goal", "selectedCapabilities"]
-    },
-    capabilities: {
-      type: "object",
-      properties: {
-        mode: { enum: ["READ_ONLY", "WRITE_ALLOWED"] },
-        requiredEndpoints: { type: "array", items: { type: "string" } }
-      },
-      required: ["mode", "requiredEndpoints"]
-    },
-    execution: {
-      type: "object",
-      properties: {
-        nodes: { type: "array" },
-        edges: { type: "array" }
-      },
-      required: ["nodes", "edges"]
-    },
-    ui: {
-      type: "object",
-      properties: {
-        layout: { type: "array" },
-        componentRegistryVersion: { type: "string" }
-      },
-      required: ["layout", "componentRegistryVersion"]
-    },
     metadata: {
       type: "object",
       properties: {
-        specUrl: { type: "string" },
-        createdAt: { type: "string", format: "date-time" }
+        title: { type: "string" },
+        targetDomain: { type: "string" },
+        compiledAt: { type: "string" }
       },
-      required: ["specUrl", "createdAt"]
+      required: ["title", "compiledAt"]
+    },
+    capabilitiesMode: { enum: ["READ_ONLY", "WRITE_SESSION_REQUIRED", "WRITE_ALLOWED"] },
+    contracts: {
+      type: "object",
+      properties: {
+        inboundIntent: { type: "string" },
+        expectedEntity: { type: "string" }
+      },
+      required: ["inboundIntent", "expectedEntity"]
+    },
+    executionGraph: {
+      type: "object",
+      properties: {
+        rootNode: { type: "string" },
+        nodes: { type: "object" }
+      },
+      required: ["rootNode", "nodes"]
+    },
+    uiProjection: {
+      type: "object",
+      properties: {
+        layout: { type: "string" },
+        components: { type: "array" },
+        componentRegistryVersion: { type: "string" }
+      },
+      required: ["layout", "components"]
     }
   },
-  required: ["version", "intent", "capabilities", "execution", "ui", "metadata"]
+  required: ["id", "version", "metadata", "capabilitiesMode", "contracts", "executionGraph", "uiProjection"]
 };
 
 const validate = ajv.compile(jdCardSchema);
 
-export function validateJdCard(data: any) {
+export function validateWorkflowApplet(data: any) {
   const valid = validate(data);
   return {
     valid,

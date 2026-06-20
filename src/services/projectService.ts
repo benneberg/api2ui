@@ -1,9 +1,9 @@
-import { type Project, type jdCard } from "../types";
+import { type Project, type JDCard } from "../types";
 
 const STORAGE_KEY = 'api2ui_projects';
 
 export const projectService = {
-  saveProject(name: string, jdCard: jdCard | null): Project {
+  saveProject(name: string, jdCard: JDCard | null): Project {
     const projects = this.getAllProjects();
     const existingIndex = projects.findIndex(p => p.name === name);
     

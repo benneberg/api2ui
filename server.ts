@@ -24,50 +24,72 @@ async function startServer() {
         apiKey = apiKey || process.env.GEMINI_API_KEY;
         if (!apiKey) return res.status(401).json({ error: "Missing Gemini API Key" });
         
+        // Format capabilities with parameter context for the LLM
         const capabilityContext = (capabilities as any[])
-          .map((c: any) => `- ${c.id}: ${c.summary}`)
+          .slice(0, 100) // Increased threshold to see more of the API
+          .map((c: any) => {
+            const props = c.inputSchema?.properties || {};
+            const paramInfo = Object.entries(props)
+              .map(([name, schema]: [string, any]) => {
+                const req = (c.inputSchema?.required || []).includes(name) ? '*' : '';
+                return `${req}${name}(${schema.type || 'any'}${schema.enum ? ': ' + schema.enum.join('|') : ''})`;
+              })
+              .join(', ');
+            
+            return `- ${c.id}: ${c.summary}${paramInfo ? ' [Params: ' + paramInfo + ']' : ''}`;
+          })
           .join("\n");
 
-        const prompt = `You are a precise API Orchestration Planner.
-Your goal is to map user intent to specific API capabilities.
-USER INTENT: "${description}"
+        const prompt = `Goal: Map natural language to a Planning IR sequence.
+Intent: "${description}"
 
-AVAILABLE CAPABILITIES:
+Available Capabilities (* = required):
 ${capabilityContext}
 
-INSTRUCTIONS:
-1. Identify the high-level goal.
-2. Select EXACT capability IDs from the list above that are necessary to fulfill the intent.
-3. Be deterministic. Do not invent capabilities.
-4. If the intent cannot be fulfilled, return an empty array for selectedCapabilities.
-5. Respond ONLY with a valid JSON object.`;
+Instructions:
+1. Extract the primary target entity and intent goal.
+2. Outline a sequence of steps (READ, FILTER, MUTATE).
+3. Populate inferredParams for each step.
+4. Return strict JSON matching IntentMap schema.`;
 
-        const genAI = new GoogleGenAI({ 
+        const ai = new GoogleGenAI({ 
           apiKey,
           httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
         });
-        const result = await genAI.models.generateContent({
-          model: modelName || "gemini-3.5-flash",
+        
+        const modelId = (modelName === 'gemini-1.5-flash' || !modelName || modelName === 'gemini-3.5-flash') ? 'gemini-3.5-flash' : modelName;
+        const response = await ai.models.generateContent({
+          model: modelId,
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           config: {
             temperature: 0,
+            systemInstruction: "You are the Linguistic Intent Extractor for API2UI Studio. Your ONLY job is to map natural language to a structured Planning IR. Do NOT perform layout or complex logic; just identify WHICH endpoints match the intent and WHAT parameters should be used. CRITICAL: You MUST satisfy ALL required parameters for the selected capabilities by inferring values from the intent or using reasonable defaults. For example, if 'status' is required but not mentioned, use 'available'. If 'tags' is required, provide an array. Always return strict JSON.",
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
               properties: {
                 goal: { type: Type.STRING },
-                selectedCapabilities: {
+                targetEntity: { type: Type.STRING },
+                steps: {
                   type: Type.ARRAY,
-                  items: { type: Type.STRING }
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      capabilityId: { type: Type.STRING },
+                      actionType: { type: Type.STRING, enum: ["READ", "FILTER", "TRANSFORM", "MUTATE"] },
+                      inferredParams: { type: Type.OBJECT }
+                    },
+                    required: ["capabilityId", "actionType", "inferredParams"]
+                  }
                 }
               },
-              required: ["goal", "selectedCapabilities"]
+              required: ["goal", "steps"]
             }
           }
         });
-        
-        const responseText = result.text || "";
-        return res.json(JSON.parse(responseText || "{}"));
+
+        const responseText = response.text || "{}";
+        return res.json(JSON.parse(responseText));
       } 
       
       const capabilityContext = (capabilities as any[])
@@ -79,7 +101,11 @@ INSTRUCTIONS:
 Return ONLY a valid JSON object with the following structure:
 {
   "goal": "string describing the high level goal",
-  "selectedCapabilities": ["ID1", "ID2", ...]
+  "targetEntity": "the primary subject of the action",
+  "steps": [
+    { "capabilityId": "ID1", "actionType": "READ|FILTER|TRANSFORM|MUTATE", "inferredParams": {} },
+    { "capabilityId": "ID2", "actionType": "READ|FILTER|TRANSFORM|MUTATE", "inferredParams": {} }
+  ]
 }
 
 USER INTENT: "${description}"
@@ -161,7 +187,7 @@ ${capabilityContext}`;
         return res.json([
           { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
           { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
-          { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' }
+          { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' }
         ]);
       }
       res.json([]);
@@ -174,6 +200,8 @@ ${capabilityContext}`;
   app.post("/api/proxy", async (req, res) => {
     try {
       const { url, method, headers, body } = req.body;
+      if (!url) return res.status(400).json({ error: "Missing Target URL" });
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -184,23 +212,30 @@ ${capabilityContext}`;
         body: method !== "GET" && method !== "HEAD" ? JSON.stringify(body) : undefined
       });
 
-      const contentType = response.headers.get("content-type");
       const text = await response.text();
+      const contentType = response.headers.get("content-type");
+
+      if (!response.ok) {
+        console.error(`Proxy Target Error [${response.status}]:`, text);
+        return res.status(response.status).json({ 
+          error: `External API Error [${response.status}]`, 
+          details: text.substring(0, 500) 
+        });
+      }
 
       if (contentType && contentType.includes("application/json")) {
         try {
           const data = JSON.parse(text);
           res.status(response.status).json(data);
         } catch (e) {
-          // If it fails to parse as JSON despite the header, send as text
           res.status(response.status).send(text);
         }
       } else {
         res.status(response.status).send(text);
       }
     } catch (error: any) {
-      console.error("Proxy Error:", error);
-      res.status(500).json({ error: error.message });
+      console.error("Proxy Network Error:", error);
+      res.status(500).json({ error: "Proxy Network Error", message: error.message });
     }
   });
 

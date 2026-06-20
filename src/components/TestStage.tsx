@@ -49,14 +49,16 @@ export const TestStage = ({ capabilities, onComplete }: TestStageProps) => {
       }
 
       // Create a mock node for execution service
-      const node = {
+      const node: any = {
         id: `test-${cap.id}`,
         capability: cap,
-        input: testInput,
-        bindings: {}
+        verb: cap.method,
+        path: cap.path,
+        type: cap.isRead ? 'READ' : 'MUTATION',
+        parameters: testInput
       };
       
-      const data = await executionService.executeNode(node, false);
+      const data = await executionService.executeRequest(node, testInput, false);
       const latency = Math.round(performance.now() - start);
       
       setResults(prev => ({

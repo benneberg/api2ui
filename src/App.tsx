@@ -37,23 +37,32 @@ import {
   Globe,
   Zap,
   Layout,
-  Edit3
+  Edit3,
+  Layers
 } from 'lucide-react';
 import { openApiService } from './services/openapiService';
 import { inferenceService } from './services/geminiService';
 import { compilerService } from './services/compilerService';
 import { projectService } from './services/projectService';
 import { exportService } from './services/exportService';
-import { validateJdCard } from './services/validationService';
-import { type Capability, type Intent, type jdCard, type ViewType, type Project, type AIProvider } from './types';
+import { validateWorkflowApplet } from './services/validationService';
+import { 
+  type Capability, 
+  type JDCard, 
+  type IntentMap,
+  type ViewType, 
+  type Project, 
+  type AIProvider 
+} from './types';
 import { cn } from './lib/utils';
 import { Toasts, type Toast } from './components/Toasts';
 import { useHistory } from './hooks/useHistory';
-import { ProjectionRenderer, SchemaForm } from './components/ProjectionRenderer';
+import { UIEngine, SchemaForm } from './components/UIEngine';
 import { FlowVisualizer } from './components/FlowVisualizer';
 import { TestStage } from './components/TestStage';
 import { mockDataService } from './services/mockDataService';
 import { executionService } from './services/executionService';
+import { type InferenceResult } from './services/geminiService';
 
 const INTENT_TEMPLATES = [
   { label: 'Resource Discovery', value: "Find all 'available' items and list their core attributes." },
@@ -68,7 +77,7 @@ export default function App() {
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
   const [isIngesting, setIsIngesting] = useState(false);
   const [jobDescription, setJobDescription] = useState('');
-  const [intent, setIntent] = useState<Intent | null>(null);
+  const [aiResult, setAiResult] = useState<InferenceResult | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   
   // Project Management
@@ -76,6 +85,8 @@ export default function App() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isRealExecution, setIsRealExecution] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [libraryDomain, setLibraryDomain] = useState<string | null>(null);
   
   // History controlled jdCard
   const { 
@@ -87,7 +98,7 @@ export default function App() {
     canRedo,
     history,
     index
-  } = useHistory<jdCard | null>(null);
+  } = useHistory<JDCard | null>(null);
 
   useEffect(() => {
     setProjects(projectService.getAllProjects());
@@ -96,7 +107,7 @@ export default function App() {
   const handleNewProject = () => {
     setProjectName('Untitled Project');
     setJobDescription('');
-    setIntent(null);
+    setAiResult(null);
     setCapabilities([]);
     pushToHistory(null);
     setActiveView('spec');
@@ -112,8 +123,10 @@ export default function App() {
   const loadProject = (p: Project) => {
     setProjectName(p.name);
     if (p.jdCard) {
-      setIntent(p.jdCard.intent);
-      setSpecUrl(p.jdCard.metadata.specUrl);
+      setAiResult({
+        goal: p.jdCard.contracts.inboundIntent,
+        steps: [] // We don't restore full intent map from compiled card easily
+      } as any);
       pushToHistory(p.jdCard);
     }
     setLibraryOpen(false);
@@ -141,11 +154,10 @@ export default function App() {
   const [autoFixEnabled, setAutoFixEnabled] = useState(true);
   const [nodeInputs, setNodeInputs] = useState<Record<string, any>>({});
   const [configuringNode, setConfiguringNode] = useState<string | null>(null);
-  const [executionResult, setExecutionResult] = useState<any[]>([]);
+  const [executionResult, setExecutionResult] = useState<Record<string, any>>({});
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<Record<string, any[]>>({});
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [llmModel, setLlmModel] = useState('gemini-3.5-flash');
   const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
   const [availableModels, setAvailableModels] = useState<any[]>([]);
@@ -220,9 +232,9 @@ export default function App() {
     setIsExtracting(true);
     setError(null);
     try {
-      const extractedIntent = await inferenceService.extractIntent(jobDescription, capabilities, aiProvider, llmModel, customApiKey);
-      setIntent(extractedIntent);
-      addToast("Intent Decoded Successfully", "success");
+      const result = await inferenceService.extractIntent(jobDescription, capabilities, aiProvider, llmModel, customApiKey);
+      setAiResult(result);
+      addToast("Intent Pipeline Compiled", "success");
       setActiveView('plan');
     } catch (err: any) {
       setError(err.message || "Failed to extract intent.");
@@ -233,101 +245,42 @@ export default function App() {
   };
 
   const handleCompile = () => {
-    if (!intent) return;
-    const compiled = compilerService.compile(intent, capabilities, writeEnabled, nodeInputs);
-    compiled.metadata.specUrl = specUrl;
+    if (!aiResult) return;
+    const compiled = compilerService.compile(aiResult as any as IntentMap, capabilities, writeEnabled);
     
-    // Validate artifact against formal schema
-    const { valid, errors } = validateJdCard(compiled);
+    // Validate artifact
+    const { valid, errors } = validateWorkflowApplet(compiled as any);
     if (!valid) {
-      console.error("jdCard Validation Errors:", errors);
+      console.error("Workflow Validation Errors:", errors);
       const errorDetails = errors?.map(e => `${e.instancePath || 'root'} ${e.message}`);
       addToast("Schema Validation Failed", "error", errorDetails);
       return;
     }
 
     pushToHistory(compiled);
-    addToast("jdCard Artifact Compiled & Validated", "success");
+    addToast("jdCard Artifact Compiled", "success");
     setActiveView('test');
   };
 
   const runExecution = async () => {
     if (!jdCard) return;
     setIsExecuting(true);
-    setExecutionLogs([]);
-    setExecutionResult([]);
-    setCurrentStepIndex(0);
+    setExecutionLogs([`[${new Date().toLocaleTimeString()}] INITIATING_GRAPH_TRAVERSAL`]);
+    setExecutionResult({});
     setSelectedRows({});
     
-    // Initial run only for the first step if it's a READ
-    const firstNode = jdCard.execution.nodes[0];
-    if (!firstNode) {
-      setIsExecuting(false);
-      return;
-    }
-
-    await executeStep(0);
-    setIsExecuting(false);
-    setActiveView('preview');
-  };
-
-  const executeStep = async (index: number, useSelection?: any[]) => {
-    if (!jdCard) return;
-    const node = jdCard.execution.nodes[index];
-    if (!node) return;
-
-    const results = [...executionResult];
-    const typeLabel = node.capability.isRead ? "READ" : "MUTATION";
-    const safetyStatus = node.capability.isRead || writeEnabled ? "SAFE" : "BLOCKED";
-
-    setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] INITIATING_NODE: ${node.id} (${typeLabel})`]);
-
-    if (safetyStatus === "BLOCKED") {
-      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] FAULT: Node ${node.id} is a MUTATION and Write Session is DISABLED. Skipping.`]);
-      return;
-    }
-
     try {
-      let data;
-      if (useSelection && useSelection.length > 0) {
-        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] BATCH_EXECUTION: Running ${useSelection.length} cycles for ${node.id}`]);
-        const batchResults = [];
-        for (const item of useSelection) {
-          const itemNode = {
-            ...node,
-            input: { ...node.input, ...item }
-          };
-          const res = isRealExecution ? 
-            await executionService.executeNode(itemNode, writeEnabled) : 
-            mockDataService.generateFromSchema(node.capability.outputSchema);
-          batchResults.push(res);
-        }
-        data = batchResults;
-      } else {
-        data = isRealExecution ? 
-          await executionService.executeNode(node, writeEnabled) : 
-          mockDataService.generateFromSchema(node.capability.outputSchema);
-      }
-
-      const res = {
-        step: node.id,
-        endpoint: node.capability.path,
-        data
-      };
-      
-      const existingIdx = results.findIndex(r => r.step === node.id);
-      if (existingIdx >= 0) {
-        results[existingIdx] = res;
-      } else {
-        results.push(res);
-      }
-
-      setExecutionResult(results);
-      setCurrentStepIndex(index);
-      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ NODE_RESOLVED: ${node.id}`]);
+      const results = await executionService.runGraph(jdCard, writeEnabled, (stepId, data) => {
+        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_RESOLVED: ${stepId}`]);
+        setExecutionResult(prev => ({ ...prev, [stepId]: { data } }));
+      });
+      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ GRAPH_TRAVERSAL_COMPLETE`]);
+      setActiveView('preview');
     } catch (err: any) {
-      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ NODE_FAULT: ${node.id}`]);
-      setExecutionLogs(prev => [...prev, `    > CAUSE: ${err.message}`]);
+      setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ FATAL_FAULT: ${err.message}`]);
+      addToast("Execution Fault Detected", "error");
+    } finally {
+      setIsExecuting(false);
     }
   };
 
@@ -433,29 +386,85 @@ export default function App() {
 
               <button 
                 onClick={handleNewProject}
-                className="w-full border-2 border-brand-ink py-4 mb-8 font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand-accent hover:text-white transition-all shadow-[4px_4px_0_0_#121212]"
+                className="w-full border-2 border-brand-ink py-4 font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand-accent hover:text-white transition-all shadow-[4px_4px_0_0_#121212]"
               >
                 <Plus size={18} />
                 New Project
               </button>
 
-              <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar">
-                <span className="mono-label">Local Snapshots</span>
-                {projects.map(p => (
-                  <div key={p.id} className="group relative border-2 border-brand-line p-4 hover:border-brand-ink transition-all">
-                    <button 
-                      onClick={() => loadProject(p)}
-                      className="w-full text-left"
+              <div className="mt-8 space-y-4 mb-6">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search artifacts..."
+                    value={librarySearch}
+                    onChange={(e) => setLibrarySearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-brand-ink font-mono text-[11px] focus:outline-none focus:bg-white transition-colors"
+                  />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setLibraryDomain(null)}
+                    className={cn(
+                      "px-2 py-1 text-[9px] font-mono border transition-all",
+                      libraryDomain === null ? "bg-brand-ink text-white border-brand-ink" : "bg-white text-gray-400 border-gray-200 hover:border-gray-400"
+                    )}
+                  >
+                    ALL_DOMAINS
+                  </button>
+                  {Array.from(new Set(projects.map(p => p.jdCard?.metadata.targetDomain).filter(Boolean))).map(domain => (
+                    <button
+                      key={domain as string}
+                      onClick={() => setLibraryDomain(domain as string)}
+                      className={cn(
+                        "px-2 py-1 text-[9px] font-mono border transition-all",
+                        libraryDomain === domain ? "bg-brand-accent text-white border-brand-accent" : "bg-white text-gray-400 border-gray-200 hover:border-gray-400"
+                      )}
                     >
-                      <h4 className="font-bold uppercase tracking-tight text-sm mb-1">{p.name}</h4>
+                      {(domain as string).toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar">
+                <div className="flex items-center justify-between">
+                  <span className="mono-label">Local Snapshots</span>
+                  <span className="text-[9px] font-mono text-gray-400">COUNT: {projects.length}</span>
+                </div>
+                {projects
+                  .filter(p => {
+                    const matchesSearch = p.name.toLowerCase().includes(librarySearch.toLowerCase()) || 
+                      p.jdCard?.contracts.inboundIntent.toLowerCase().includes(librarySearch.toLowerCase());
+                    const matchesDomain = libraryDomain ? p.jdCard?.metadata.targetDomain === libraryDomain : true;
+                    return matchesSearch && matchesDomain;
+                  })
+                  .map(p => (
+                  <div key={p.id} className="group relative border-2 border-brand-line p-4 hover:border-brand-ink transition-all cursor-pointer bg-white" onClick={() => loadProject(p)}>
+                    <div className="w-full text-left">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-bold uppercase tracking-tight text-sm truncate pr-6">{p.name}</h4>
+                        {p.jdCard?.metadata.targetDomain && (
+                          <Globe size={12} className="text-brand-accent opacity-40" />
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <span className="mono-label text-[9px]">{new Date(p.updatedAt).toLocaleDateString()}</span>
                         <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                        <span className="mono-label text-[9px]">{p.jdCard?.execution.nodes.length || 0} Nodes</span>
+                        <span className="mono-label text-[9px]">{p.jdCard ? Object.keys(p.jdCard.executionGraph.nodes).length : 0} nodes</span>
+                        {p.jdCard?.metadata.targetDomain && (
+                          <>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                            <span className="mono-label text-[9px] text-brand-accent">{p.jdCard.metadata.targetDomain}</span>
+                          </>
+                        )}
                       </div>
-                    </button>
+                    </div>
                     <button 
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         projectService.deleteProject(p.id);
                         setProjects(projectService.getAllProjects());
                       }}
@@ -465,6 +474,11 @@ export default function App() {
                     </button>
                   </div>
                 ))}
+                {projects.length === 0 && (
+                  <div className="py-20 text-center border-2 border-dashed border-gray-100 italic font-serif text-gray-300 text-sm">
+                    No artifacts persisted in local storage.
+                  </div>
+                )}
               </div>
             </motion.aside>
           </>
@@ -779,7 +793,8 @@ export default function App() {
                   </div>
 
                   <div className="space-y-6">
-                    {intent?.selectedCapabilities.map((capId, idx) => {
+                    {aiResult?.pipeline?.map((step, idx) => {
+                      const capId = step.capabilityId;
                       const capability = capabilities.find(c => c.id === capId);
                       const hasProperties = capability?.inputSchema?.properties && Object.keys(capability.inputSchema.properties).length > 0;
                       const hasPathParams = capability?.path.includes('{');
@@ -973,7 +988,7 @@ export default function App() {
                         <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 05 // Schema Surface Interface</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="mono-label bg-gray-100 px-2 py-1">Nodes: {executionResult.length}</div>
+                        <div className="mono-label bg-gray-100 px-2 py-1">Nodes: {Object.keys(executionResult).length}</div>
                         <div className="mono-label bg-brand-accent/10 text-brand-accent px-2 py-1">Interactive_Tool</div>
                       </div>
                     </div>
@@ -1007,76 +1022,98 @@ export default function App() {
                         </div>
                       </div>
 
-                      {executionResult.length > 0 ? (
-                        <div className="space-y-12">
-                          {executionResult.map((res, i) => (
-                            <div key={res.step} className="space-y-6">
-                              <ProjectionRenderer 
-                                result={res} 
-                                onSelectionChange={(items) => setSelectedRows(prev => ({ ...prev, [res.step]: items }))}
-                                selectedItems={selectedRows[res.step]}
-                              />
-                              
-                              {/* Selection Action Rail */}
-                              {selectedRows[res.step]?.length > 0 && jdCard && jdCard.execution.nodes[currentStepIndex + 1] && (
-                                <motion.div 
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  className="p-6 bg-brand-ink text-white shadow-[8px_8px_0_0_#D1D1D1] flex flex-col md:flex-row items-center justify-between gap-6"
-                                >
-                                  <div>
-                                    <div className="font-bold text-xl uppercase italic">Interaction Pipeline Primed</div>
-                                    <p className="font-mono text-[10px] text-gray-400 mt-1">
-                                      SELECTED: {selectedRows[res.step].length} ITEMS // TARGET_ACTION: {jdCard.execution.nodes[currentStepIndex + 1].capability.summary}
-                                    </p>
-                                  </div>
-                                  <button 
-                                    onClick={() => executeStep(currentStepIndex + 1, selectedRows[res.step])}
-                                    className="px-8 py-3 bg-brand-accent text-white font-bold uppercase tracking-widest text-xs hover:bg-white hover:text-brand-ink transition-all flex items-center gap-2"
-                                  >
-                                    Execute {jdCard.execution.nodes[currentStepIndex+1].id} for Selection
-                                    <ArrowRight size={14} />
-                                  </button>
-                                </motion.div>
-                              )}
+                      {jdCard && (
+                        <UIEngine 
+                          jdCard={jdCard}
+                          executionResults={executionResult}
+                          selectedItems={selectedRows}
+                          onSelectionChange={(nodeId, items) => setSelectedRows(prev => ({ ...prev, [nodeId]: items }))}
+                          onActionExecute={runExecution}
+                        />
+                      )}
+
+                      {/* Interactive Pipeline Input Generation */}
+                      {jdCard && (
+                        <div className="space-y-8 pt-12 border-t-2 border-brand-ink">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-brand-accent text-white rounded-lg shadow-[2px_2px_0_0_#121212]">
+                                <Layers size={18} />
+                              </div>
+                              <div>
+                                <h3 className="font-serif italic text-2xl">Pipeline Integration Parameters</h3>
+                                <p className="text-[9px] font-mono text-gray-400 uppercase tracking-widest">Dynamic_State_Injection</p>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="py-20 border-2 border-dashed border-brand-line flex flex-col items-center justify-center text-gray-300 italic font-serif">
-                          No experimental data collected yet.
+                            <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full border border-brand-line">
+                              <div className="w-1.5 h-1.5 bg-brand-accent animate-pulse rounded-full" />
+                              <span className="mono-label text-[9px]">AWAITING_INPUTS</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-6">
+                            {jdCard.execution.nodes.map((node, nodeIdx) => {
+                              const hasInputs = node.capability.inputSchema?.properties && Object.keys(node.capability.inputSchema.properties).length > 0;
+                              if (!hasInputs) return null;
+                              
+                              const isCompleted = executionResult.some(r => r.step === node.id);
+                              
+                              return (
+                                <div key={node.id} className={cn(
+                                  "group relative border-2 transition-all rounded-xl overflow-hidden",
+                                  isCompleted ? "border-brand-line opacity-60" : "border-brand-ink bg-white shadow-[6px_6px_0_0_#D1D1D1]"
+                                )}>
+                                  <div className={cn(
+                                    "p-4 flex items-center justify-between border-b-2",
+                                    isCompleted ? "bg-gray-50 border-brand-line" : "bg-brand-ink text-white border-brand-ink"
+                                  )}>
+                                    <div className="flex items-center gap-3">
+                                      <div className="font-mono text-[10px] font-bold opacity-50">NODE_0{nodeIdx + 1}</div>
+                                      <h4 className="font-bold text-xs uppercase tracking-tight truncate max-w-[200px]">{node.id}</h4>
+                                      {isCompleted && <CheckCircle size={14} className="text-green-500" />}
+                                    </div>
+                                    <div className="mono-label text-[9px] opacity-70">
+                                      METHOD: {node.capability.method} // PATH: {node.capability.path}
+                                    </div>
+                                  </div>
+                                  <div className="p-6">
+                                    <SchemaForm 
+                                      title={`Configuration: ${node.capability.summary || node.id}`}
+                                      schema={node.capability.inputSchema}
+                                      onSubmit={(data) => {
+                                        setNodeInputs(prev => ({ ...prev, [node.id]: data }));
+                                        addToast(`Configuration Cached: ${node.id}`, "success");
+                                      }}
+                                    />
+                                    {nodeInputs[node.id] && (
+                                      <div className="mt-4 p-3 bg-gray-50 border-2 border-brand-ink/10 rounded-lg font-mono text-[9px] text-gray-500 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <Code2 size={12} />
+                                          <span>CACHED_INPUT_PAYLOAD: {Object.keys(nodeInputs[node.id]).length} FIELDS</span>
+                                        </div>
+                                        <button 
+                                          onClick={() => setNodeInputs(prev => {
+                                            const next = { ...prev };
+                                            delete next[node.id];
+                                            return next;
+                                          })}
+                                          className="text-red-400 hover:text-red-600 transition-colors"
+                                        >
+                                          PURGE_CACHE
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
 
-                      {/* Manual Mutations for steps without direct pipeline links */}
-                      {jdCard && jdCard.execution.nodes.filter((n, i) => !n.capability.isRead && i > currentStepIndex).length > 0 && (
-                        <div className="space-y-8 pt-12 border-t-2 border-brand-line border-dashed">
-                          <div className="flex items-center gap-2">
-                            <Shield className="text-red-500" size={16} />
-                            <span className="mono-label text-red-500">Standalone State Mutations</span>
-                          </div>
-                          {jdCard.execution.nodes.filter((n, i) => !n.capability.isRead && i > currentStepIndex).map((node, i) => (
-                            <SchemaForm 
-                              key={node.id}
-                              title={node.capability.summary || `Update ${node.capability.path}`}
-                              schema={node.capability.inputSchema || { type: 'object', properties: {} }}
-                              onSubmit={async (formData) => {
-                                if (isRealExecution) {
-                                  addToast(`Executing Live Mutation: ${node.id}`, "info");
-                                  try {
-                                    await executionService.executeNode({...node, input: formData}, writeEnabled);
-                                    addToast("Mutation Success", "success");
-                                    // Refresh the list if we just mutated something
-                                    if (currentStepIndex >= 0) executeStep(0);
-                                  } catch (err: any) {
-                                    addToast("Mutation Failed", "error", [err.message]);
-                                  }
-                                } else {
-                                  addToast(`Simulation: Transaction Queued`, "info");
-                                }
-                              }}
-                            />
-                          ))}
+                      {Object.keys(executionResult).length === 0 && !isExecuting && (
+                        <div className="py-20 border-2 border-dashed border-brand-line flex flex-col items-center justify-center text-gray-300 italic font-serif">
+                          No experimental data collected yet.
                         </div>
                       )}
                     </div>

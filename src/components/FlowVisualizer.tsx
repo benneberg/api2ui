@@ -10,23 +10,24 @@ import {
   Cell,
   ReferenceLine
 } from 'recharts';
-import { type jdCard } from '../types';
+import { type JDCard } from '../types';
 
 interface FlowVisualizerProps {
-  jdCard: jdCard;
+  jdCard: JDCard;
 }
 
 export const FlowVisualizer = ({ jdCard }: FlowVisualizerProps) => {
-  const nodes = jdCard.execution.nodes;
+  const nodesMap = jdCard.executionGraph.nodes;
+  const nodes = Object.values(nodesMap);
   
   // Map nodes to scatter points
   const data = nodes.map((node, index) => ({
     x: index * 10,
     y: 50,
     name: node.id,
-    method: node.capability.method,
-    safety: node.capability.safetyClassification,
-    isRead: node.capability.isRead
+    method: node.verb,
+    safety: node.capability?.safetyClassification || 'READ_ONLY',
+    isRead: node.verb === 'GET'
   }));
 
   const CustomTooltip = ({ active, payload }: any) => {

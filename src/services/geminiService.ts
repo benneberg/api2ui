@@ -1,4 +1,6 @@
-import { type Capability, type Intent, type AIProvider } from "../types";
+import { type Capability, type AIProvider, type IntentMap } from "../types";
+
+export type InferenceResult = IntentMap;
 
 export class InferenceService {
   async extractIntent(
@@ -7,7 +9,7 @@ export class InferenceService {
     provider: AIProvider = 'gemini',
     modelName: string = "gemini-3.5-flash", 
     customApiKey?: string
-  ): Promise<Intent> {
+  ): Promise<InferenceResult> {
     const response = await fetch('/api/ai/extract', {
       method: "POST",
       headers: { "Content-Type": "application/json" },

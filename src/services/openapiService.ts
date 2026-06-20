@@ -155,7 +155,10 @@ export class OpenApiService {
         const resolvedParam = this.resolveRef(param, spec, `${location}.param[${i}]`, autoFix);
         if (resolvedParam && resolvedParam.name) {
           const paramSchema = resolvedParam.schema || { type: 'string' };
-          combinedSchema.properties[resolvedParam.name] = this.normalizeSchema(paramSchema, spec, `${location}.${resolvedParam.name}`, autoFix);
+          const normalized = this.normalizeSchema(paramSchema, spec, `${location}.${resolvedParam.name}`, autoFix);
+          // Preserve parameter location
+          normalized._in = resolvedParam.in || 'query';
+          combinedSchema.properties[resolvedParam.name] = normalized;
           if (resolvedParam.description) {
             combinedSchema.properties[resolvedParam.name].description = resolvedParam.description;
           }
@@ -169,9 +172,13 @@ export class OpenApiService {
       if (bodyContent) {
         const normalizedBody = this.normalizeSchema(bodyContent, spec, `${location}.body`, autoFix);
         if (normalizedBody.properties) {
+          // Mark body properties
+          Object.keys(normalizedBody.properties).forEach(k => {
+            normalizedBody.properties[k]._in = 'body';
+          });
           combinedSchema.properties = { ...combinedSchema.properties, ...normalizedBody.properties };
         } else {
-          // Flatten body if it's named 'body' or anonymous
+          normalizedBody._in = 'body';
           combinedSchema.properties['_body'] = normalizedBody;
         }
       }
