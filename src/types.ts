@@ -73,7 +73,7 @@ export interface UIComponentSchema {
   bindsTo?: string; // For legacy compatibility or simplified mapping
 }
 
-export type ViewType = 'spec' | 'intent' | 'plan' | 'test' | 'preview' | 'lab';
+export type ViewType = 'spec' | 'intent' | 'plan' | 'test' | 'preview' | 'lab' | 'history';
 
 export type AIProvider = 'gemini' | 'openrouter' | 'groq';
 

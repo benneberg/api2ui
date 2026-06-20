@@ -1,66 +1,33 @@
-# API2UI Studio - Architecture Document (Updated)
+# Architecture
 
-## 🌐 Revised Vision & Core Principles
-We evolve from "LLM-powered API builder" to a **schema-constrained orchestration compiler with UI projection**.
+## Components
+- **Client (React + Vite)**:
+  - `App.tsx`: Central state orchestration.
+  - `components/`: UI modules (Markdown, CodeEditor, History, GraphVisualizer).
+  - `services/`: Domain logic (Compiler, Execution, Gemini AI, OpenAPI Mapping).
+- **Server (Express + Gemini SDK)**:
+  - `/api/inference`: Proxies requests to Gemini to keep keys secure.
+  - `/api/proxy`: Bypasses CORS for external API execution.
+  - `/api/models`: Service discovery for LLM versions.
 
-**Key Architectural Shift**:
-- LLM is demoted to assistant for **intent mapping, ranking, and composition only**.
-- Deterministic engine (Planner + Compiler) owns orchestration, graph building, validation, and projection.
-- Clear separation: Planning vs Execution.
-- Introduce **Intermediate Representations (IRs)** so jdCard is a composed *artifact*, not a god object.
-- Capability Graph derived from normalized OpenAPI becomes the source of truth for available operations.
-- UI is a deterministic *projection* from schemas and contracts onto a fixed component registry.
+## Data Flow
+- **Source of Truth**: The `JDCard` (Artifact Record). It contains the metadata, contracts, and the executable graph.
+- **Flow**: User Input -> `geminiService` (Inference) -> `compilerService` (Planning) -> `JDCard` (State) -> `executionService` (Runtime) -> UI Preview.
 
-## 📊 Layered Architecture
+## Integrations
+- **Google GenAI SDK**: Powers the "Brain" of the platform.
+- **Faker.js**: Used for intelligent mock data generation.
+- **Lucide React**: Visual iconography.
 
-### 1. Ingestion & Normalization Layer
-- **Input**: OpenAPI JSON/YAML (URL or file).
-- **Processing**: Normalization (fix missing schemas, resolve refs, infer types, repair examples), heuristics for common issues.
-- **Output**: Clean **Capability Graph** + indexed spec store.
+## Observability
+- Execution logs in the "Lab" view.
+- Local storage based "Run History" for auditing previous results.
 
-### 2. Intent Layer (LLM-Assisted)
-- **Input**: User natural language + acceptance criteria.
-- **Processing**: LLM (temperature 0, strict schema) outputs **Structured Intent**.
-- **Constraint**: LLM does **not** generate execution steps or bindings.
+## Risks
+- **AI Hallucinations**: The planner might generate invalid API sequences if the prompt is ambiguous.
+- **Security**: The proxy route could be abused if not restricted.
 
-### 3. Planning & Compiler Layer (Deterministic Engine)
-- **Planner**: Maps intent + capability graph → **Planning IR**.
-- **Compiler**: Planning IR → **Execution IR** (Directed Graph with node bindings).
-- **Enforcement**: Safety gates (read-only markers), topologically ordered execution.
-
-### 4. jdCard Artifact
-A portable, versioned JSON document that composes:
-- **Intent**: Goal + suggested capabilities.
-- **Execution**: Nodes, edges, and runtime validations.
-- **UI IR**: Layout bindings to component registry.
-- **Contracts**: Input/Output schemas.
-- **Metadata**: Spec references, timestamps.
-
-### 5. UI Projection / Renderer Layer
-- **Input**: Execution IR output schemas + UI IR.
-- **Logic**: Deterministic mapping (Data shape → Component type).
-- **Registry**: Table, Form, Chart, Metric, Toggle, etc.
-
-### 6. Runtime & Execution Layer
-- **Mock Executor**: Schema-aware, using OpenAPI examples.
-- **Real Executor**: Enforces safety gates, supports live calls.
-- **Chain Runner**: Traverses the Execution IR graph.
-
-### 7. Library & Composition Layer
-- **Library**: IndexedDB store for jdCards.
-- **Composition**: Support for nested jdCards and reusable subflows.
-
-## 🔄 Data Flow
-```
-User NL Description
-    ↓ (LLM Intent Mapping)
-Structured Intent
-    ↓ (Deterministic Planner)
-Planning IR
-    ↓ (Compiler)
-Execution IR + jdCard
-    ↓ (Renderer)
-UI Projection (Deterministic)
-    ↓ (Library/Runtime)
-Executable Artifact (jdCard)
-```
+## Confidence
+- **Component Layout**: 100%
+- **Data Flow**: 95%
+- **Scaling Limits**: 60% (Large specs need testing)

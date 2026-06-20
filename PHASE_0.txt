@@ -1,0 +1,4 @@
+CLASSIFICATION: NOT SIMPLE
+CONFIDENCE: High
+EVIDENCE: Full-stack architecture (Express + React), dedicated service layer for AI inference, OpenAPI parsing, graph execution, and local-first persistence.
+ROUTE TO: 1B

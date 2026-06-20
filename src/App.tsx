@@ -38,7 +38,8 @@ import {
   Zap,
   Layout,
   Edit3,
-  Layers
+  Layers,
+  Clock
 } from 'lucide-react';
 import { openApiService } from './services/openapiService';
 import { inferenceService } from './services/geminiService';
@@ -63,6 +64,8 @@ import { TestStage } from './components/TestStage';
 import { mockDataService } from './services/mockDataService';
 import { executionService } from './services/executionService';
 import { type InferenceResult } from './services/geminiService';
+import { runHistoryService, type RunHistoryEntry } from './services/runHistoryService';
+import { RunHistory } from './components/RunHistory';
 
 const INTENT_TEMPLATES = [
   { label: 'Resource Discovery', value: "Find all 'available' items and list their core attributes." },
@@ -275,13 +278,31 @@ export default function App() {
         setExecutionResult(prev => ({ ...prev, [stepId]: { data } }));
       });
       setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ GRAPH_TRAVERSAL_COMPLETE`]);
+      
+      // Save to Run History
+      runHistoryService.saveRun({
+        intent: jdCard.contracts.inboundIntent,
+        jdCard,
+        executionResults: results,
+        projectName
+      });
+      
       setActiveView('preview');
+      addToast("Execution Traversal Complete // History Logged", "success");
     } catch (err: any) {
       setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ FATAL_FAULT: ${err.message}`]);
       addToast("Execution Fault Detected", "error");
     } finally {
       setIsExecuting(false);
     }
+  };
+
+  const handleRestoreHistory = (entry: RunHistoryEntry) => {
+    setProjectName(entry.projectName);
+    pushToHistory(entry.jdCard);
+    setExecutionResult(entry.executionResults);
+    setActiveView('preview');
+    addToast("Restored Execution Metadata from History", "info");
   };
 
   const navItems: { id: ViewType; label: string; icon: any }[] = [
@@ -291,6 +312,7 @@ export default function App() {
     { id: 'test', label: 'Test', icon: Activity },
     { id: 'lab', label: 'Lab', icon: Play },
     { id: 'preview', label: 'Preview', icon: Eye },
+    { id: 'history', label: 'History', icon: Clock },
   ];
 
   return (
@@ -1156,6 +1178,16 @@ export default function App() {
                       </div>
                     </div>
                   )}
+                </motion.div>
+              )}
+              {activeView === 'history' && (
+                <motion.div
+                  key="history"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <RunHistory onReRun={handleRestoreHistory} />
                 </motion.div>
               )}
             </AnimatePresence>
