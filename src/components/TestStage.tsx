@@ -7,7 +7,9 @@ import {
   AlertTriangle, 
   Search,
   RefreshCw,
-  Zap
+  Zap,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { type Capability, type TestResult } from '../types';
 import { cn } from '../lib/utils';
@@ -17,12 +19,15 @@ import { mockDataService } from '../services/mockDataService';
 interface TestStageProps {
   capabilities: Capability[];
   onComplete: () => void;
+  acceptanceTests: string[];
+  setAcceptanceTests: (tests: string[]) => void;
 }
 
-export const TestStage = ({ capabilities, onComplete }: TestStageProps) => {
+export const TestStage = ({ capabilities, onComplete, acceptanceTests, setAcceptanceTests }: TestStageProps) => {
   const [results, setResults] = useState<Record<string, TestResult>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
+  const [newTest, setNewTest] = useState('');
 
   const runSweep = async () => {
     for (const cap of capabilities) {
@@ -86,117 +91,177 @@ export const TestStage = ({ capabilities, onComplete }: TestStageProps) => {
     }
   };
 
+  const handleAddTest = () => {
+    if (newTest.trim()) {
+      setAcceptanceTests([...acceptanceTests, newTest.trim()]);
+      setNewTest('');
+    }
+  };
+
+  const handleRemoveTest = (index: number) => {
+    setAcceptanceTests(acceptanceTests.filter((_, i) => i !== index));
+  };
+
   const filtered = capabilities.filter(c => 
     c.id.toLowerCase().includes(filter.toLowerCase()) || 
     c.summary.toLowerCase().includes(filter.toLowerCase())
   );
 
   return (
-    <div className="bg-white border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#D1D1D1]">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div>
-          <h2 className="font-serif italic text-4xl mb-4">Diagnostics Lab</h2>
-          <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 04 // Endpoint Health & Latency Monitoring</p>
+    <div className="space-y-8">
+      {/* Acceptance Tests Editor */}
+      <div className="bg-white border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#D1D1D1]">
+        <div className="mb-6">
+          <h2 className="font-serif italic text-4xl mb-4">Acceptance Criteria</h2>
+          <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Contract Verification // Post-Execution Assertions</p>
         </div>
-        <button 
-          onClick={runSweep}
-          disabled={!!testing}
-          className="px-6 py-3 bg-brand-accent text-white font-bold uppercase tracking-widest text-[10px] shadow-[4px_4px_0_0_#121212] hover:translate-y-1 hover:shadow-none transition-all flex items-center gap-2"
-        >
-          {testing ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
-          Perform Auto Sweep
-        </button>
-      </div>
 
-      <div className="mb-6 relative">
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-          <Search size={16} />
-        </div>
-        <input 
-          placeholder="FILTER_CAPABILITY_GRAPH..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-brand-line focus:border-brand-ink focus:outline-none font-mono text-xs"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
-        {filtered.map((cap) => {
-          const res = results[cap.id];
-          return (
-            <div 
-              key={cap.id}
-              className={cn(
-                "border-2 p-4 transition-all group relative",
-                testing === cap.id ? "border-brand-accent bg-brand-accent/5" : 
-                res?.status === 'SUCCESS' ? "border-green-500 bg-green-50/30" :
-                res?.status === 'FAILURE' ? "border-red-500 bg-red-50/30" : "border-brand-line hover:border-brand-ink"
-              )}
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <input 
+              value={newTest}
+              onChange={(e) => setNewTest(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddTest()}
+              placeholder="e.g. response.status_code == 200"
+              className="flex-1 px-4 py-3 bg-gray-50 border-2 border-brand-ink focus:outline-none font-mono text-xs"
+            />
+            <button 
+              onClick={handleAddTest}
+              className="px-6 py-3 bg-brand-ink text-white font-bold uppercase tracking-widest text-[10px] hover:bg-brand-accent transition-all flex items-center gap-2"
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="max-w-[80%]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={cn(
-                      "font-mono text-[9px] px-1.5 py-0.5 rounded-sm font-bold uppercase",
-                      cap.isRead ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
-                    )}>
-                      {cap.method}
-                    </span>
-                    <code className="text-[10px] font-bold text-gray-400 truncate">{cap.id}</code>
-                  </div>
-                  <h4 className="font-bold text-sm truncate uppercase tracking-tight">{cap.summary}</h4>
-                </div>
+              <Plus size={14} />
+              Add Test
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {acceptanceTests.map((test, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-gray-50 border-2 border-brand-line group hover:border-brand-ink transition-all">
+                <code className="text-xs font-mono font-bold text-brand-ink">{test}</code>
                 <button 
-                  onClick={() => runTest(cap)}
-                  disabled={testing === cap.id}
-                  className="p-2 border border-brand-line hover:bg-brand-ink hover:text-white transition-all disabled:opacity-30"
+                  onClick={() => handleRemoveTest(i)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                 >
-                  <Activity size={14} />
+                  <Trash2 size={14} />
                 </button>
               </div>
+            ))}
+            {acceptanceTests.length === 0 && (
+              <div className="py-8 text-center border-2 border-dashed border-gray-100 text-gray-300 font-serif italic">
+                No active contract assertions defined.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <Clock size={12} className="text-gray-400" />
-                  <span className="font-mono text-[10px] text-gray-500">
-                    {res ? `${res.latency}ms` : '---'}
-                  </span>
+      {/* Diagnostics Lab */}
+      <div className="bg-white border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#D1D1D1]">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h2 className="font-serif italic text-4xl mb-4">Diagnostics Lab</h2>
+            <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 04 // Endpoint Health & Latency Monitoring</p>
+          </div>
+          <button 
+            onClick={runSweep}
+            disabled={!!testing}
+            className="px-6 py-3 bg-brand-accent text-white font-bold uppercase tracking-widest text-[10px] shadow-[4px_4px_0_0_#121212] hover:translate-y-1 hover:shadow-none transition-all flex items-center gap-2"
+          >
+            {testing ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
+            Perform Auto Sweep
+          </button>
+        </div>
+
+        <div className="mb-6 relative">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <Search size={16} />
+          </div>
+          <input 
+            placeholder="FILTER_CAPABILITY_GRAPH..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-brand-line focus:border-brand-ink focus:outline-none font-mono text-xs"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+          {filtered.map((cap) => {
+            const res = results[cap.id];
+            return (
+              <div 
+                key={cap.id}
+                className={cn(
+                  "border-2 p-4 transition-all group relative",
+                  testing === cap.id ? "border-brand-accent bg-brand-accent/5" : 
+                  res?.status === 'SUCCESS' ? "border-green-500 bg-green-50/30" :
+                  res?.status === 'FAILURE' ? "border-red-500 bg-red-50/30" : "border-brand-line hover:border-brand-ink"
+                )}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="max-w-[80%]">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={cn(
+                        "font-mono text-[9px] px-1.5 py-0.5 rounded-sm font-bold uppercase",
+                        cap.isRead ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
+                      )}>
+                        {cap.method}
+                      </span>
+                      <code className="text-[10px] font-bold text-gray-400 truncate">{cap.id}</code>
+                    </div>
+                    <h4 className="font-bold text-sm truncate uppercase tracking-tight">{cap.summary}</h4>
+                  </div>
+                  <button 
+                    onClick={() => runTest(cap)}
+                    disabled={testing === cap.id}
+                    className="p-2 border border-brand-line hover:bg-brand-ink hover:text-white transition-all disabled:opacity-30"
+                  >
+                    <Activity size={14} />
+                  </button>
                 </div>
-                {res && (
+
+                <div className="flex items-center gap-6">
                   <div className="flex items-center gap-2">
-                    {res.status === 'SUCCESS' ? (
-                      <CheckCircle2 size={12} className="text-green-600" />
-                    ) : (
-                      <AlertTriangle size={12} className="text-red-500" />
-                    )}
-                    <span className={cn(
-                      "font-mono text-[10px] font-bold",
-                      res.status === 'SUCCESS' ? "text-green-600" : "text-red-500"
-                    )}>
-                      {res.status === 'SUCCESS' ? 'HEALTHY' : 'FAULT'}
+                    <Clock size={12} className="text-gray-400" />
+                    <span className="font-mono text-[10px] text-gray-500">
+                      {res ? `${res.latency}ms` : '---'}
                     </span>
+                  </div>
+                  {res && (
+                    <div className="flex items-center gap-2">
+                      {res.status === 'SUCCESS' ? (
+                        <CheckCircle2 size={12} className="text-green-600" />
+                      ) : (
+                        <AlertTriangle size={12} className="text-red-500" />
+                      )}
+                      <span className={cn(
+                        "font-mono text-[10px] font-bold",
+                        res.status === 'SUCCESS' ? "text-green-600" : "text-red-500"
+                      )}>
+                        {res.status === 'SUCCESS' ? 'HEALTHY' : 'FAULT'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {res?.error && (
+                  <div className="mt-3 p-2 bg-red-100/50 border border-red-200 text-[9px] font-mono text-red-600 break-all">
+                    ERROR: {res.error}
                   </div>
                 )}
               </div>
+            );
+          })}
+        </div>
 
-              {res?.error && (
-                <div className="mt-3 p-2 bg-red-100/50 border border-red-200 text-[9px] font-mono text-red-600 break-all">
-                  ERROR: {res.error}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-8 pt-8 border-t-2 border-brand-line border-dashed flex justify-end">
-        <button 
-          onClick={onComplete}
-          className="px-8 py-4 bg-brand-ink text-white font-bold uppercase tracking-widest text-xs hover:bg-brand-accent transition-all flex items-center gap-3"
-        >
-          Confirm Diagnostics & Proceed
-          <RefreshCw size={16} />
-        </button>
+        <div className="mt-8 pt-8 border-t-2 border-brand-line border-dashed flex justify-end">
+          <button 
+            onClick={onComplete}
+            className="px-8 py-4 bg-brand-ink text-white font-bold uppercase tracking-widest text-xs hover:bg-brand-accent transition-all flex items-center gap-3"
+          >
+            Confirm Diagnostics & Proceed
+            <RefreshCw size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

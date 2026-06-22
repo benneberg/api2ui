@@ -66,6 +66,8 @@ import { executionService } from './services/executionService';
 import { type InferenceResult } from './services/geminiService';
 import { runHistoryService, type RunHistoryEntry } from './services/runHistoryService';
 import { RunHistory } from './components/RunHistory';
+import { testRunnerService } from './services/testRunnerService';
+import { VersionHistory } from './components/VersionHistory';
 
 const INTENT_TEMPLATES = [
   { label: 'Resource Discovery', value: "Find all 'available' items and list their core attributes." },
@@ -90,6 +92,9 @@ export default function App() {
   const [isRealExecution, setIsRealExecution] = useState(false);
   const [librarySearch, setLibrarySearch] = useState('');
   const [libraryDomain, setLibraryDomain] = useState<string | null>(null);
+  const [versionHistory, setVersionHistory] = useState<JDCard[]>([]);
+  const [acceptanceTests, setAcceptanceTests] = useState<string[]>([]);
+  const [testValidationResults, setTestValidationResults] = useState<any[]>([]);
   
   // History controlled jdCard
   const { 
@@ -112,6 +117,8 @@ export default function App() {
     setJobDescription('');
     setAiResult(null);
     setCapabilities([]);
+    setAcceptanceTests([]);
+    setVersionHistory([]);
     pushToHistory(null);
     setActiveView('spec');
     addToast("New Project Workspace Initialized", "info");
@@ -120,16 +127,19 @@ export default function App() {
   const handleSaveProject = () => {
     const saved = projectService.saveProject(projectName, jdCard);
     setProjects(projectService.getAllProjects());
-    addToast(`Project "${projectName}" Persisted`, "success");
+    setVersionHistory(saved.versionHistory || []);
+    addToast(`Project "${projectName}" Persisted [v${saved.jdCard?.version}]`, "success");
   };
 
   const loadProject = (p: Project) => {
     setProjectName(p.name);
+    setVersionHistory(p.versionHistory || []);
     if (p.jdCard) {
       setAiResult({
         goal: p.jdCard.contracts.inboundIntent,
         steps: [] // We don't restore full intent map from compiled card easily
       } as any);
+      setAcceptanceTests(p.jdCard.contracts.acceptanceTests || []);
       pushToHistory(p.jdCard);
     }
     setLibraryOpen(false);
@@ -251,6 +261,10 @@ export default function App() {
     if (!aiResult) return;
     const compiled = compilerService.compile(aiResult as any as IntentMap, capabilities, writeEnabled);
     
+    // Add version and acceptanceTests
+    compiled.version = jdCard?.version || '1.0.0';
+    compiled.contracts.acceptanceTests = acceptanceTests;
+
     // Validate artifact
     const { valid, errors } = validateWorkflowApplet(compiled as any);
     if (!valid) {
@@ -271,6 +285,7 @@ export default function App() {
     setExecutionLogs([`[${new Date().toLocaleTimeString()}] INITIATING_GRAPH_TRAVERSAL`]);
     setExecutionResult({});
     setSelectedRows({});
+    setTestValidationResults([]);
     
     try {
       const results = await executionService.runGraph(jdCard, writeEnabled, (stepId, data) => {
@@ -279,6 +294,20 @@ export default function App() {
       });
       setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ GRAPH_TRAVERSAL_COMPLETE`]);
       
+      // Run Acceptance Tests
+      if (acceptanceTests.length > 0) {
+        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 🧪 RUNNING_ACCEPTANCE_TESTS...`]);
+        const testResults = testRunnerService.runTests(acceptanceTests, results);
+        setTestValidationResults(testResults);
+        
+        const passedCount = testResults.filter(r => r.passed).length;
+        if (passedCount === testResults.length) {
+          setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✨ ALL_TESTS_PASSED (${passedCount}/${testResults.length})`]);
+        } else {
+          setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ⚠️ TEST_SUITE_FAILURES: ${testResults.length - passedCount} FAILED`]);
+        }
+      }
+
       // Save to Run History
       runHistoryService.saveRun({
         intent: jdCard.contracts.inboundIntent,
@@ -305,6 +334,22 @@ export default function App() {
     addToast("Restored Execution Metadata from History", "info");
   };
 
+  const handleRevert = (index: number) => {
+    const project = projects.find(p => p.name === projectName);
+    if (!project) return;
+
+    const updated = projectService.revertToVersion(project.id, index);
+    if (updated) {
+      setProjects(projectService.getAllProjects());
+      setVersionHistory(updated.versionHistory || []);
+      if (updated.jdCard) {
+        pushToHistory(updated.jdCard);
+        setAcceptanceTests(updated.jdCard.contracts.acceptanceTests || []);
+      }
+      addToast(`Reverted to version v${updated.jdCard?.version}`, "success");
+    }
+  };
+
   const navItems: { id: ViewType; label: string; icon: any }[] = [
     { id: 'spec', label: 'Ingest', icon: Database },
     { id: 'intent', label: 'Intent', icon: Target },
@@ -312,7 +357,8 @@ export default function App() {
     { id: 'test', label: 'Test', icon: Activity },
     { id: 'lab', label: 'Lab', icon: Play },
     { id: 'preview', label: 'Preview', icon: Eye },
-    { id: 'history', label: 'History', icon: Clock },
+    { id: 'history', label: 'Runs', icon: Clock },
+    { id: 'versions', label: 'Versions', icon: Undo2 },
   ];
 
   return (
@@ -913,6 +959,8 @@ export default function App() {
                   <TestStage 
                     capabilities={capabilities} 
                     onComplete={() => setActiveView('lab')} 
+                    acceptanceTests={acceptanceTests}
+                    setAcceptanceTests={setAcceptanceTests}
                   />
                 </motion.div>
               )}
@@ -932,17 +980,17 @@ export default function App() {
                         <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 04 // Graph Traversal Lab</p>
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer group">
-                            <span className={cn("mono-label transition-colors", !isRealExecution ? "text-brand-accent font-bold" : "text-gray-400 group-hover:text-brand-ink")}>Simulation</span>
+                            <span className={cn("mono-label transition-colors", !writeEnabled ? "text-brand-accent font-bold" : "text-gray-400 group-hover:text-brand-ink")}>Simulation</span>
                             <div 
-                              onClick={() => setIsRealExecution(!isRealExecution)}
+                              onClick={toggleWriteMode}
                               className="w-10 h-5 bg-gray-200 border-2 border-brand-ink relative shadow-[1px_1px_0_0_#121212]"
                             >
                               <div className={cn(
                                 "absolute top-0 bottom-0 w-4 bg-brand-ink transition-all",
-                                isRealExecution ? "right-0" : "left-0"
+                                writeEnabled ? "right-0" : "left-0"
                               )} />
                             </div>
-                            <span className={cn("mono-label transition-colors", isRealExecution ? "text-brand-accent font-bold" : "text-gray-400 group-hover:text-brand-ink")}>Live Host</span>
+                            <span className={cn("mono-label transition-colors", writeEnabled ? "text-brand-accent font-bold" : "text-gray-400 group-hover:text-brand-ink")}>Live Host</span>
                           </label>
                         </div>
                       </div>
@@ -967,6 +1015,8 @@ export default function App() {
                           <div key={i} className={cn(
                             "opacity-0 animate-in fade-in slide-in-from-left-2 duration-300 fill-mode-forwards",
                             log.includes('COMPLETE') ? "text-blue-400" :
+                            log.includes('PASSED') ? "text-green-400" :
+                            log.includes('FAILED') ? "text-red-400" :
                             log.includes('TERMINATED') ? "text-yellow-400" : "text-gray-400"
                           )}>
                             {log}
@@ -989,9 +1039,49 @@ export default function App() {
                         isExecuting ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-brand-ink text-white hover:bg-brand-accent shadow-[4px_4px_0_0_#121212] active:translate-y-1 active:shadow-none"
                       )}
                     >
-                      {isExecuting ? "Sequence Active ..." : isRealExecution ? "Initialize Live Sequence" : "Initialize Simulation"}
+                      {isExecuting ? "Sequence Active ..." : "Initialize Traversal"}
                     </button>
                   </div>
+
+                  {/* Assertion Results Display */}
+                  {testValidationResults.length > 0 && (
+                    <div className="bg-white border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#D1D1D1]">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="font-serif italic text-3xl">Validation Report</h3>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="text-green-500" size={16} />
+                          <span className="mono-label text-xs uppercase">Contract Integrity</span>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {testValidationResults.map((test, i) => (
+                          <div key={i} className={cn(
+                            "p-4 border-2 flex items-center justify-between",
+                            test.passed ? "border-green-100 bg-green-50" : "border-red-100 bg-red-50"
+                          )}>
+                            <div className="flex items-center gap-4">
+                              <div className={cn(
+                                "w-6 h-6 rounded-full flex items-center justify-center font-mono text-[9px] font-bold text-white",
+                                test.passed ? "bg-green-500" : "bg-red-500"
+                              )}>
+                                {test.passed ? 'OK' : '!'}
+                              </div>
+                              <div>
+                                <code className="text-xs font-bold text-brand-ink block">{test.condition}</code>
+                                {test.error && <p className="text-[9px] text-red-600 font-mono mt-1">FAILURE_MESSAGE: {test.error}</p>}
+                              </div>
+                            </div>
+                            <span className={cn(
+                              "font-mono text-[10px] font-bold uppercase",
+                              test.passed ? "text-green-600" : "text-red-500"
+                            )}>
+                              {test.passed ? 'PASSED' : 'FAILED'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -1006,7 +1096,10 @@ export default function App() {
                   <div className="bg-white border-2 border-brand-ink p-8 shadow-[8px_8px_0_0_#D1D1D1]">
                     <div className="mb-8 flex justify-between items-end">
                       <div>
-                        <h2 className="font-serif italic text-4xl mb-2">UI Projection</h2>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h2 className="font-serif italic text-4xl">UI Projection</h2>
+                          <span className="px-2 py-0.5 bg-brand-ink text-white font-mono text-[10px] font-bold rounded">v{jdCard?.version || '1.0.0'}</span>
+                        </div>
                         <p className="text-gray-500 font-mono text-xs uppercase tracking-tight">Stage 05 // Schema Surface Interface</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -1078,7 +1171,7 @@ export default function App() {
                               const hasInputs = node.capability.inputSchema?.properties && Object.keys(node.capability.inputSchema.properties).length > 0;
                               if (!hasInputs) return null;
                               
-                              const isCompleted = executionResult.some(r => r.step === node.id);
+                              const isCompleted = !!executionResult[node.id];
                               
                               return (
                                 <div key={node.id} className={cn(
@@ -1150,6 +1243,7 @@ export default function App() {
                             <h3 className="text-white font-bold uppercase tracking-widest text-sm">Portable Artifact Bundle</h3>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-green-400 font-mono text-[9px] border border-green-400 px-1 py-0.5 rounded-sm">VALIDATED_SCHEMA_V1</span>
+                              <span className="text-gray-500 font-mono text-[9px]">v{jdCard.version}</span>
                               <span className="text-gray-500 font-mono text-[9px]">SIZE: {(JSON.stringify(jdCard).length / 1024).toFixed(2)} KB</span>
                             </div>
                           </div>
@@ -1188,6 +1282,20 @@ export default function App() {
                   exit={{ opacity: 0 }}
                 >
                   <RunHistory onReRun={handleRestoreHistory} />
+                </motion.div>
+              )}
+              {activeView === 'versions' && (
+                <motion.div
+                  key="versions"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <VersionHistory 
+                    currentVersion={jdCard?.version || '1.0.0'} 
+                    history={versionHistory} 
+                    onRevert={handleRevert} 
+                  />
                 </motion.div>
               )}
             </AnimatePresence>

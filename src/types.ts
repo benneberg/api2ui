@@ -32,6 +32,7 @@ export interface JDCard {
   contracts: {
     inboundIntent: string;
     expectedEntity: string;
+    acceptanceTests?: string[];
   };
   executionGraph: {
     rootNode: string;
@@ -73,7 +74,7 @@ export interface UIComponentSchema {
   bindsTo?: string; // For legacy compatibility or simplified mapping
 }
 
-export type ViewType = 'spec' | 'intent' | 'plan' | 'test' | 'preview' | 'lab' | 'history';
+export type ViewType = 'spec' | 'intent' | 'plan' | 'test' | 'preview' | 'lab' | 'history' | 'versions';
 
 export type AIProvider = 'gemini' | 'openrouter' | 'groq';
 
@@ -81,6 +82,7 @@ export interface Project {
   id: string;
   name: string;
   jdCard: JDCard | null;
+  versionHistory?: JDCard[];
   updatedAt: string;
 }
 
