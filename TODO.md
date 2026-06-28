@@ -16,3 +16,8 @@
 ## Low (Maintenance)
 - [ ] Add Vitest for service-layer unit testing.
 - [ ] Refactor `App.tsx` (over 1k lines) into smaller feature-based components (e.g., `Nav.tsx`, `Workspace.tsx`).
+
+## Notes:
+Integrate interactive filtering and sorting controls into the UI projection. Based on the data schema, generate appropriate filter widgets (e.g., text inputs, dropdowns, date pickers) and sorting options that dynamically update the displayed data without re-executing the plan.
+
+Implement a data visualization module. Based on the output schema and execution results, suggest and render appropriate charts (e.g., bar, line, pie) in addition to tables. Provide options for the user to select the desired visualization type.
