@@ -2,7 +2,7 @@ import { type JDCard, type ExecutionNode } from "../types";
 import { mockDataService } from "./mockDataService";
 
 export const executionService = {
-  async runGraph(jdCard: JDCard, writeEnabled: boolean, onProgress?: (stepId: string, result: any) => void): Promise<Record<string, any>> {
+  async runGraph(jdCard: JDCard, writeEnabled: boolean, onProgress?: (stepId: string, result: any) => void, simulate = false): Promise<Record<string, any>> {
     const results: Record<string, any> = {};
     let currentNodeId: string | 'END' = jdCard.executionGraph.rootNode;
 
@@ -18,10 +18,10 @@ export const executionService = {
           const list = this.resolveValue(node.iterator, results) || [];
           result = await Promise.all(list.map(async (item: any) => {
             const iterParams = { ...resolvedParams, ...this.resolveBindings(node.parameters, { iterator: { item } }) };
-            return this.executeRequest(node, iterParams, writeEnabled);
+            return this.executeRequest(node, iterParams, writeEnabled, simulate);
           }));
         } else {
-          result = await this.executeRequest(node, resolvedParams, writeEnabled);
+          result = await this.executeRequest(node, resolvedParams, writeEnabled, simulate);
         }
 
         results[currentNodeId] = { data: result, node };
@@ -31,7 +31,7 @@ export const executionService = {
       } catch (err: any) {
         console.error(`Node ${currentNodeId} failed:`, err);
         if (node.onFailure === 'TRIGGER_SAGA_ROLLBACK') {
-          await this.rollback(jdCard, results, writeEnabled);
+          await this.rollback(jdCard, results, writeEnabled, simulate);
           throw new Error(`Execution halted. Saga rollback triggered: ${err.message}`);
         }
         currentNodeId = node.onFailure as any || 'END';
@@ -41,7 +41,7 @@ export const executionService = {
     return results;
   },
 
-  async rollback(jdCard: JDCard, results: Record<string, any>, writeEnabled: boolean) {
+  async rollback(jdCard: JDCard, results: Record<string, any>, writeEnabled: boolean, simulate = false) {
     console.warn("SAGA_ROLLBACK_INITIATED");
     const nodeIds = Object.keys(results).reverse();
     for (const id of nodeIds) {
@@ -54,7 +54,7 @@ export const executionService = {
             verb: node.compensation.verb, 
             path: node.compensation.path,
             capability: node.capability 
-          } as any, compParams, writeEnabled);
+          } as any, compParams, writeEnabled, simulate);
         } catch (e) {
           console.error(`Compensation failed for ${id}:`, e);
         }
@@ -62,14 +62,20 @@ export const executionService = {
     }
   },
 
-  async executeRequest(node: ExecutionNode, params: any, writeEnabled: boolean): Promise<any> {
-    if (node.type === 'MUTATION' && !writeEnabled) {
+  async executeRequest(node: ExecutionNode, params: any, writeEnabled: boolean, simulate = false): Promise<any> {
+    if (!simulate && node.type === 'MUTATION' && !writeEnabled) {
       throw new Error("MUTATION_BLOCKED: Read-only mode.");
     }
 
     const satisfiedParams = this.satisfyParameters(node, params);
     const { url, method, body } = this.buildRequest(node, satisfiedParams);
-    
+
+    // Simulation mode: never touch the live host. Synthesize a realistic,
+    // schema-aware response from the capability's declared output schema.
+    if (simulate) {
+      return mockDataService.generateFromSchema(node.capability?.outputSchema);
+    }
+
     const response = await fetch('/api/proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

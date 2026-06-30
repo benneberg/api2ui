@@ -50,6 +50,7 @@ import { validateWorkflowApplet } from './services/validationService';
 import { 
   type Capability, 
   type JDCard, 
+  type ExecutionNode,
   type IntentMap,
   type ViewType, 
   type Project, 
@@ -279,19 +280,38 @@ export default function App() {
     setActiveView('test');
   };
 
-  const runExecution = async () => {
+  const runExecution = async (overrideNodeId?: string, overrideParams?: Record<string, any>) => {
     if (!jdCard) return;
     setIsExecuting(true);
     setExecutionLogs([`[${new Date().toLocaleTimeString()}] INITIATING_GRAPH_TRAVERSAL`]);
     setExecutionResult({});
     setSelectedRows({});
     setTestValidationResults([]);
-    
+
+    // Merge user-supplied inputs (plan-stage configuration + projected form payloads)
+    // into the compiled node parameters so the graph executes with real values.
+    const executableCard: JDCard = {
+      ...jdCard,
+      executionGraph: {
+        ...jdCard.executionGraph,
+        nodes: Object.fromEntries(
+          Object.entries(jdCard.executionGraph.nodes).map(([id, node]: [string, ExecutionNode]) => {
+            const cached = nodeInputs[id] || (node.capability?.id ? nodeInputs[node.capability.id] : undefined);
+            const override = overrideNodeId === id ? overrideParams : undefined;
+            return [id, { ...node, parameters: { ...node.parameters, ...(cached || {}), ...(override || {}) } }];
+          })
+        )
+      }
+    };
+
+    const simulate = !writeEnabled;
+    setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] MODE: ${simulate ? 'SIMULATION (schema-mocked)' : 'LIVE_HOST'}`]);
+
     try {
-      const results = await executionService.runGraph(jdCard, writeEnabled, (stepId, data) => {
+      const results = await executionService.runGraph(executableCard, writeEnabled, (stepId, data) => {
         setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_RESOLVED: ${stepId}`]);
         setExecutionResult(prev => ({ ...prev, [stepId]: { data } }));
-      });
+      }, simulate);
       setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ GRAPH_TRAVERSAL_COMPLETE`]);
       
       // Run Acceptance Tests
@@ -1143,7 +1163,7 @@ export default function App() {
                           executionResults={executionResult}
                           selectedItems={selectedRows}
                           onSelectionChange={(nodeId, items) => setSelectedRows(prev => ({ ...prev, [nodeId]: items }))}
-                          onActionExecute={runExecution}
+                          onActionExecute={(_actionId, nodeId, payload) => runExecution(nodeId || undefined, payload)}
                         />
                       )}
 

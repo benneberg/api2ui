@@ -25,7 +25,7 @@ import { type JDCard, type UIComponentSchema } from '../types';
 interface UIEngineProps {
   jdCard: JDCard;
   executionResults: Record<string, any>;
-  onActionExecute?: (actionId: string, nodeId: string) => void;
+  onActionExecute?: (actionId: string, nodeId: string, payload?: any) => void;
   onSelectionChange?: (nodeId: string, selection: any[]) => void;
   selectedItems?: Record<string, any[]>;
 }
@@ -64,7 +64,7 @@ export const UIEngine = ({
               comp={comp} 
               context={executionResults}
               resolve={resolveValue}
-              onAction={() => onActionExecute?.(comp.id, comp.bindsTo || '')}
+              onAction={(payload?: any) => onActionExecute?.(comp.id, comp.bindsTo || '', payload)}
               onSelection={(items) => onSelectionChange?.(comp.bindsTo || '', items)}
               selection={selectedItems[comp.bindsTo || ''] || []}
             />
@@ -131,7 +131,7 @@ const SemanticComponent = ({ comp, context, resolve, onAction, onSelection, sele
             </p>
           </div>
           <button 
-            onClick={onAction}
+            onClick={() => onAction()}
             className="px-10 py-4 bg-brand-accent text-white font-bold uppercase text-[10px] hover:bg-white hover:text-brand-ink transition-all flex items-center gap-3 rounded-full shadow-lg"
           >
             {comp.properties?.label || 'Execute'}
@@ -144,7 +144,7 @@ const SemanticComponent = ({ comp, context, resolve, onAction, onSelection, sele
       return <DataChart data={resolve(comp.bindings.dataSource, context)} title={comp.title} />;
 
     case 'FORM':
-      return <SchemaForm schema={comp.properties?.schema || {}} onSubmit={onAction} title={comp.title || 'Submission Form'} />;
+      return <SchemaForm schema={comp.properties?.schema || {}} onSubmit={onAction} title={comp.title || 'Submission Form'} submitLabel={comp.properties?.submitLabel} />;
 
     default:
       return <div className="p-4 border-2 border-dashed border-gray-200 rounded-lg text-mono text-[10px] text-gray-400">UNSUPPORTED_COMPONENT: {comp.type}</div>;
@@ -292,7 +292,7 @@ const DataChart = ({ data, title }: any) => {
 };
 
 // Form Implementation
-export const SchemaForm = ({ schema, onSubmit, title }: any) => {
+export const SchemaForm = ({ schema, onSubmit, title, submitLabel }: any) => {
   const [formData, setFormData] = React.useState<any>({});
 
   const renderField = (name: string, fieldSchema: any) => {
@@ -385,7 +385,7 @@ export const SchemaForm = ({ schema, onSubmit, title }: any) => {
           className="w-full bg-brand-ink text-white font-bold py-5 uppercase tracking-[0.2em] text-xs hover:bg-brand-accent transition-all active:translate-y-1 active:shadow-none shadow-neubrutalism flex items-center justify-center gap-3 rounded-lg"
         >
           <Zap size={16} />
-          Commit Execution Payload
+          {submitLabel || 'Commit Execution Payload'}
         </button>
       </div>
     </div>

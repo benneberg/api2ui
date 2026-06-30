@@ -25,16 +25,11 @@ export class CompilerService {
 
       // Handle chaining: if this is a mutation and we had a READ before, maybe we iterate
       if (step.actionType === 'MUTATE' && prevNodeId && executionNodes[prevNodeId].type === 'READ') {
-        node.iterator = `${prevNodeId}.exports.items`;
+        node.iterator = `${prevNodeId}.data`;
         // Automatically bind ID to path parameter if possible
         if (capability?.path.includes('{id}')) {
           node.parameters.id = "{{iterator.item.id}}";
         }
-      }
-
-      // Add exports
-      if (step.actionType === 'READ') {
-        node.exports = { items: "response.body" };
       }
 
       executionNodes[nodeId] = node;
@@ -48,6 +43,27 @@ export class CompilerService {
     intent.steps.forEach((step, i) => {
       const nodeId = `node_${i}_${step.capabilityId}`;
       const capability = capabilityGraph.find(c => c.id === step.capabilityId);
+      const inputSchema = capability?.inputSchema;
+      const hasInputs = !!(inputSchema?.properties && Object.keys(inputSchema.properties).length > 0);
+
+      // Gradio-style input projection: render a form for any step whose
+      // capability accepts parameters so the user can supply them before running.
+      if (hasInputs) {
+        uiComponents.push({
+          id: `form_${i}`,
+          type: 'FORM',
+          title: capability?.summary || `Parameters for ${intent.targetEntity || 'Operation'}`,
+          bindsTo: nodeId,
+          bindings: {},
+          properties: {
+            schema: inputSchema,
+            submitLabel: step.actionType === 'MUTATE' ? 'Commit Execution Payload' : 'Run Query'
+          },
+          events: {
+            onSubmit: 'START_GRAPH_EXECUTION'
+          }
+        });
+      }
 
       if (step.actionType === 'READ') {
         uiComponents.push({
@@ -55,14 +71,16 @@ export class CompilerService {
           type: 'Data-Table',
           title: `Filtered ${intent.targetEntity || 'Resources'}`,
           bindings: {
-            dataSource: `{{${nodeId}.exports.items}}`
+            dataSource: `{{${nodeId}.data}}`
           }
         });
-      } else if (step.actionType === 'MUTATE') {
+      } else if (step.actionType === 'MUTATE' && !hasInputs) {
+        // Parameter-less mutation: a confirmation trigger is enough.
         uiComponents.push({
           id: `trigger_${i}`,
           type: 'Action-Trigger-Button',
           title: capability?.summary || 'Execute Operation',
+          bindsTo: nodeId,
           bindings: {},
           properties: {
             label: capability?.summary || 'Commit Change',
