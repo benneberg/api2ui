@@ -4,6 +4,13 @@ export const mockDataService = {
   generateFromSchema(schema: any): any {
     if (!schema) return { info: "No output schema defined" };
 
+    if (schema.anyOf && Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+      return this.generateFromSchema(faker.helpers.arrayElement(schema.anyOf));
+    }
+    if (schema.oneOf && Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+      return this.generateFromSchema(faker.helpers.arrayElement(schema.oneOf));
+    }
+
     if (schema.type === 'array') {
       const count = faker.number.int({ min: 3, max: 8 });
       return Array.from({ length: count }, () => this.generateObject(schema.items));
@@ -14,6 +21,13 @@ export const mockDataService = {
 
   generateObject(schema: any): any {
     if (!schema) return {};
+
+    if (schema.anyOf && Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+      return this.generateObject(faker.helpers.arrayElement(schema.anyOf));
+    }
+    if (schema.oneOf && Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+      return this.generateObject(faker.helpers.arrayElement(schema.oneOf));
+    }
     
     // Resolve $ref if present (though openapiService should have normalized most)
     if (schema.type === 'string') {
@@ -77,6 +91,13 @@ export const mockDataService = {
   },
 
   generateField(name: string, schema: any): any {
+    if (schema && schema.anyOf && Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+      return this.generateField(name, faker.helpers.arrayElement(schema.anyOf));
+    }
+    if (schema && schema.oneOf && Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+      return this.generateField(name, faker.helpers.arrayElement(schema.oneOf));
+    }
+
     // Context-aware generation based on field name
     const lowerName = name.toLowerCase();
     if (lowerName.includes('email')) return faker.internet.email();

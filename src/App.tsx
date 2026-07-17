@@ -53,7 +53,8 @@ import {
   type IntentMap,
   type ViewType, 
   type Project, 
-  type AIProvider 
+  type AIProvider,
+  type ExecutionNode
 } from './types';
 import { cn } from './lib/utils';
 import { Toasts, type Toast } from './components/Toasts';
@@ -68,6 +69,7 @@ import { runHistoryService, type RunHistoryEntry } from './services/runHistorySe
 import { RunHistory } from './components/RunHistory';
 import { testRunnerService } from './services/testRunnerService';
 import { VersionHistory } from './components/VersionHistory';
+import { Nav } from './components/Nav';
 
 const INTENT_TEMPLATES = [
   { label: 'Resource Discovery', value: "Find all 'available' items and list their core attributes." },
@@ -95,6 +97,7 @@ export default function App() {
   const [versionHistory, setVersionHistory] = useState<JDCard[]>([]);
   const [acceptanceTests, setAcceptanceTests] = useState<string[]>([]);
   const [testValidationResults, setTestValidationResults] = useState<any[]>([]);
+  const [nodeStatuses, setNodeStatuses] = useState<Record<string, 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED'>>({});
   
   // History controlled jdCard
   const { 
@@ -287,11 +290,30 @@ export default function App() {
     setSelectedRows({});
     setTestValidationResults([]);
     
+    const initialStatuses: Record<string, 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED'> = {};
+    Object.keys(jdCard.executionGraph.nodes).forEach(nodeId => {
+      initialStatuses[nodeId] = 'PENDING';
+    });
+    setNodeStatuses(initialStatuses);
+    
     try {
-      const results = await executionService.runGraph(jdCard, writeEnabled, (stepId, data) => {
-        setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_RESOLVED: ${stepId}`]);
-        setExecutionResult(prev => ({ ...prev, [stepId]: { data } }));
-      });
+      const results = await executionService.runGraph(
+        jdCard, 
+        writeEnabled, 
+        (stepId, data) => {
+          setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_RESOLVED: ${stepId}`]);
+          setExecutionResult(prev => ({ ...prev, [stepId]: { data } }));
+          setNodeStatuses(prev => ({ ...prev, [stepId]: 'SUCCESS' }));
+        },
+        (stepId) => {
+          setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] NODE_STARTED: ${stepId}`]);
+          setNodeStatuses(prev => ({ ...prev, [stepId]: 'RUNNING' }));
+        },
+        (stepId, err) => {
+          setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ NODE_FAILED: ${stepId} - ${err.message}`]);
+          setNodeStatuses(prev => ({ ...prev, [stepId]: 'FAILED' }));
+        }
+      );
       setExecutionLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ GRAPH_TRAVERSAL_COMPLETE`]);
       
       // Run Acceptance Tests
@@ -349,17 +371,6 @@ export default function App() {
       addToast(`Reverted to version v${updated.jdCard?.version}`, "success");
     }
   };
-
-  const navItems: { id: ViewType; label: string; icon: any }[] = [
-    { id: 'spec', label: 'Ingest', icon: Database },
-    { id: 'intent', label: 'Intent', icon: Target },
-    { id: 'plan', label: 'Compile', icon: Settings2 },
-    { id: 'test', label: 'Test', icon: Activity },
-    { id: 'lab', label: 'Lab', icon: Play },
-    { id: 'preview', label: 'Preview', icon: Eye },
-    { id: 'history', label: 'Runs', icon: Clock },
-    { id: 'versions', label: 'Versions', icon: Undo2 },
-  ];
 
   return (
     <div className="min-h-screen bg-brand-bg text-brand-ink font-sans selection:bg-brand-accent selection:text-white overflow-x-hidden">
@@ -554,33 +565,8 @@ export default function App() {
       </AnimatePresence>
 
       <main className="max-w-5xl mx-auto px-6 py-12">
-        {/* Navigation Stepper - Vertical Rule Style */}
-        <nav className="flex items-center gap-8 mb-16 border-b border-brand-line pb-4 overflow-x-auto no-scrollbar">
-          {navItems.map((item, idx) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveView(item.id)}
-              className={cn(
-                "group relative flex flex-col items-start gap-1 pb-4 transition-all min-w-[80px]",
-                activeView === item.id ? "opacity-100" : "opacity-40 hover:opacity-100"
-              )}
-            >
-              <span className="font-mono text-[10px] font-bold text-brand-line group-hover:text-brand-ink transition-colors">0{idx + 1}</span>
-              <span className={cn(
-                "text-sm font-bold uppercase tracking-tight",
-                activeView === item.id ? "text-brand-accent" : "text-brand-ink"
-              )}>
-                {item.label}
-              </span>
-              {activeView === item.id && (
-                <motion.div 
-                  layoutId="activeTab"
-                  className="absolute bottom-[-1px] left-0 right-0 h-1 bg-brand-accent"
-                />
-              )}
-            </button>
-          ))}
-        </nav>
+        {/* Navigation Stepper */}
+        <Nav activeView={activeView} setActiveView={setActiveView} />
 
         {/* Global Error Banner */}
         <AnimatePresence>
@@ -1000,6 +986,59 @@ export default function App() {
                           <FlowVisualizer jdCard={jdCard} />
                         </div>
                       )}
+
+                      {/* Visual Loader & Progress of Execution Steps */}
+                      {jdCard && (
+                        <div className="mb-8 bg-white border-2 border-brand-ink p-6 rounded-xl shadow-[4px_4px_0_0_#D1D1D1]">
+                          <h3 className="font-serif italic text-lg mb-4 flex items-center justify-between">
+                            <span>Execution Flow Steps</span>
+                            {isExecuting && (
+                              <span className="mono-label text-[10px] text-brand-accent animate-pulse uppercase">Active Processing</span>
+                            )}
+                          </h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {(Object.values(jdCard.executionGraph.nodes) as ExecutionNode[]).map((node) => {
+                              const status = nodeStatuses[node.id] || 'PENDING';
+                              return (
+                                <div 
+                                  key={node.id} 
+                                  className={cn(
+                                    "p-3 border-2 transition-all flex items-center justify-between rounded-lg",
+                                    status === 'SUCCESS' ? "border-green-400 bg-green-50/30" :
+                                    status === 'FAILED' ? "border-red-400 bg-red-50/30" :
+                                    status === 'RUNNING' ? "border-brand-accent bg-blue-50/30 animate-pulse" : "border-gray-200 bg-gray-50/30"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                      "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white",
+                                      status === 'SUCCESS' ? "bg-green-500" :
+                                      status === 'FAILED' ? "bg-red-500" :
+                                      status === 'RUNNING' ? "bg-blue-500 animate-spin" : "bg-gray-400"
+                                    )}>
+                                      {status === 'SUCCESS' ? '✓' :
+                                       status === 'FAILED' ? '✗' :
+                                       status === 'RUNNING' ? '↻' : '○'}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-sans font-medium text-xs text-brand-ink truncate">{node.capability?.summary || node.id}</p>
+                                      <p className="font-mono text-[9px] text-gray-500 truncate">{node.verb} {node.path}</p>
+                                    </div>
+                                  </div>
+                                  <span className={cn(
+                                    "font-mono text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ml-2 flex-shrink-0",
+                                    status === 'SUCCESS' ? "bg-green-100 text-green-700" :
+                                    status === 'FAILED' ? "bg-red-100 text-red-700" :
+                                    status === 'RUNNING' ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+                                  )}>
+                                    {status}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="bg-[#121212] p-6 text-white font-mono text-[11px] leading-relaxed relative overflow-hidden min-h-[300px]">
@@ -1258,10 +1297,17 @@ export default function App() {
                           </button>
                           <button 
                             onClick={() => exportService.downloadAsHtml(jdCard)}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-accent text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest hover:bg-white hover:text-brand-ink transition-all active:translate-y-0.5"
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-transparent border border-white/20 text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest hover:bg-white hover:text-brand-ink transition-all active:translate-y-0.5"
                           >
                             <ExternalLink size={14} />
                             HTML Bundle
+                          </button>
+                          <button 
+                            onClick={() => exportService.downloadAsReact(jdCard)}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-accent text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest hover:bg-white hover:text-brand-ink transition-all active:translate-y-0.5"
+                          >
+                            <Code2 size={14} />
+                            React Code
                           </button>
                         </div>
                       </div>

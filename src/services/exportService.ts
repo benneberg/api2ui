@@ -214,6 +214,246 @@ class ExportService {
     this.triggerDownload(blob, `api2ui-bundle-${new Date().getTime()}.html`);
   }
 
+  downloadAsReact(jdCard: JDCard) {
+    const componentCode = `import React, { useState, useEffect } from 'react';
+import { Play, Check, AlertTriangle, Database, Terminal, CheckCircle2, RotateCcw } from 'lucide-react';
+
+interface UIComponent {
+  id: string;
+  type: string;
+  title?: string;
+  bindings: Record<string, any>;
+  properties?: Record<string, any>;
+  events?: Record<string, string>;
+}
+
+export default function WorkflowUI() {
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+  const [runningStep, setRunningStep] = useState<string | null>(null);
+  const [results, setResults] = useState<Record<string, any>>({});
+  const [logs, setLogs] = useState<string[]>([]);
+  const [writeEnabled, setWriteEnabled] = useState(false);
+
+  const title = "${jdCard.metadata.title}";
+  const intent = "${jdCard.contracts.inboundIntent.replace(/"/g, '\\"')}";
+  const capabilitiesMode = "${jdCard.capabilitiesMode}";
+  
+  const nodes = ${JSON.stringify(Object.values(jdCard.executionGraph.nodes), null, 2)};
+  const components = ${JSON.stringify(jdCard.uiProjection.components, null, 2)};
+
+  const addLog = (msg: string) => {
+    setLogs(prev => [...prev, \`[\${new Date().toLocaleTimeString()}] \${msg}\`]);
+  };
+
+  const handleExecute = async () => {
+    if (isExecuting) return;
+    setIsExecuting(true);
+    setCompletedSteps([]);
+    setResults({});
+    setLogs([]);
+    addLog("INITIATING STANDALONE WORKFLOW EXECUTION...");
+
+    for (const node of nodes) {
+      setRunningStep(node.id);
+      addLog(\`RUNNING STEP: \${node.capability?.summary || node.id} [\${node.verb} \${node.path || ''}]\`);
+      
+      // Simulate network latency
+      await new Promise(r => setTimeout(r, 800));
+
+      if (node.type === 'MUTATION' && !writeEnabled) {
+        addLog(\`❌ MUTATION_BLOCKED: Read-only mode active. Please toggle 'Write Session' to allow writes.\`);
+        setIsExecuting(false);
+        setRunningStep(null);
+        return;
+      }
+
+      // Generate schema-aware mock response
+      const mockResult = generateMockDataForNode(node);
+      setResults(prev => ({ ...prev, [node.id]: mockResult }));
+      setCompletedSteps(prev => [...prev, node.id]);
+      addLog(\`✓ STEP COMPLETED: \${node.id}\`);
+    }
+
+    setRunningStep(null);
+    setIsExecuting(false);
+    addLog("✨ WORKFLOW EXECUTION COMPLETE. ALL NODES RESOLVED.");
+  };
+
+  const generateMockDataForNode = (node: any) => {
+    if (node.verb === 'GET') {
+      return {
+        items: Array.from({ length: 4 }, (_, i) => ({
+          id: \`id_\${Math.floor(Math.random() * 1000)}\`,
+          name: \`Sample Item \${i + 1}\`,
+          status: i % 2 === 0 ? 'ACTIVE' : 'PENDING',
+          updatedAt: new Date().toISOString(),
+        }))
+      };
+    }
+    return { success: true, message: "Operation committed successfully", id: Math.floor(Math.random() * 1000000) };
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-[#121212] font-sans p-6 md:p-12">
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* Header */}
+        <header className="bg-white border-2 border-black p-8 shadow-[8px_8px_0_0_#121212] flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="space-y-2">
+            <span className="font-mono text-[10px] uppercase text-blue-600 font-bold tracking-widest">Standalone React component</span>
+            <h1 className="font-serif italic text-4xl">{title}</h1>
+            <p className="text-gray-500 text-sm max-w-2xl font-medium">{intent}</p>
+          </div>
+          <div className="flex flex-wrap gap-4 items-center">
+            {capabilitiesMode !== 'READ_ONLY' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <span className={\`text-[10px] font-mono transition-colors font-bold uppercase \${!writeEnabled ? 'text-blue-600' : 'text-gray-400'}\`}>Simulate</span>
+                <div 
+                  onClick={() => setWriteEnabled(!writeEnabled)}
+                  className="w-10 h-5 bg-gray-200 border-2 border-black relative shadow-[1px_1px_0_0_#121212]"
+                >
+                  <div className={\`absolute top-0 bottom-0 w-4 bg-black transition-all \${writeEnabled ? 'right-0' : 'left-0'}\`} />
+                </div>
+                <span className={\`text-[10px] font-mono transition-colors font-bold uppercase \${writeEnabled ? 'text-blue-600' : 'text-gray-400'}\`}>Write Session</span>
+              </label>
+            )}
+            <button
+              onClick={handleExecute}
+              disabled={isExecuting}
+              className={\`px-6 py-3 font-bold uppercase font-mono text-xs tracking-wider transition-all border-2 border-black \${isExecuting ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' : 'bg-black text-white hover:bg-blue-600 hover:text-white shadow-[4px_4px_0_0_#121212] active:translate-y-1 active:shadow-none'}\`}
+            >
+              {isExecuting ? 'Running...' : 'Execute Flow'}
+            </button>
+          </div>
+        </header>
+
+        {/* Workspace Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Left Column: DAG Stepper Status */}
+          <div className="space-y-6">
+            <div className="bg-white border-2 border-black p-6 shadow-[4px_4px_0_0_#121212]">
+              <h3 className="font-serif italic text-lg mb-4">Workflow Nodes</h3>
+              <div className="space-y-3">
+                {nodes.map((node: any) => {
+                  const isCompleted = completedSteps.includes(node.id);
+                  const isRunning = runningStep === node.id;
+                  
+                  return (
+                    <div 
+                      key={node.id} 
+                      className={\`p-4 border-2 transition-all flex items-center justify-between \${isCompleted ? 'border-green-400 bg-green-50/20' : isRunning ? 'border-blue-500 bg-blue-50/20 animate-pulse' : 'border-gray-200 bg-gray-50'}\`}
+                    >
+                      <div>
+                        <p className="font-semibold text-xs">{node.capability?.summary || node.id}</p>
+                        <p className="font-mono text-[9px] text-gray-500 uppercase mt-0.5">{node.verb} {node.path || ''}</p>
+                      </div>
+                      <span className={\`font-mono text-[8px] font-bold px-1.5 py-0.5 rounded uppercase \${isCompleted ? 'bg-green-100 text-green-700' : isRunning ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}\`}>
+                        {isCompleted ? 'Done' : isRunning ? 'Active' : 'Pending'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Runtime Log Terminal */}
+            <div className="bg-black text-white p-6 shadow-[6px_6px_0_0_#121212] font-mono text-[10px] min-h-[180px] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-3 text-green-400 border-b border-white/10 pb-2">
+                  <Terminal size={12} />
+                  <span className="font-bold tracking-wider uppercase">Runtime Monitor</span>
+                </div>
+                <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
+                  {logs.map((log, i) => (
+                    <div key={i} className={log.includes('❌') ? 'text-red-400' : log.includes('✓') ? 'text-green-400' : 'text-gray-300'}>
+                      {log}
+                    </div>
+                  ))}
+                  {logs.length === 0 && <span className="text-gray-500">System idle. Ready for activation.</span>}
+                </div>
+              </div>
+              {isExecuting && <div className="text-green-400 mt-2 animate-pulse font-bold">_ PROCESSING...</div>}
+            </div>
+          </div>
+
+          {/* Right Column: Dynamic UI Projections */}
+          <div className="lg:col-span-2 space-y-6">
+            {components.map((comp: UIComponent) => {
+              const nodeRef = nodes.find((n: any) => comp.bindings.dataSource?.includes(n.id));
+              const nodeData = nodeRef ? results[nodeRef.id] : null;
+              
+              return (
+                <div key={comp.id} className="bg-white border-2 border-black p-6 shadow-[4px_4px_0_0_#121212] space-y-4">
+                  <div className="flex justify-between items-center border-b-2 border-black pb-2">
+                    <h3 className="font-serif italic text-xl">{comp.title || 'Dynamic Panel'}</h3>
+                    <span className="px-2 py-0.5 bg-black text-white font-mono text-[9px] rounded font-bold uppercase">{comp.type}</span>
+                  </div>
+
+                  {comp.type === 'Data-Table' || comp.type === 'TABLE' ? (
+                    <div>
+                      {nodeData && nodeData.items ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-2 border-black font-mono text-xs text-left">
+                            <thead>
+                              <tr className="bg-black text-white uppercase italic">
+                                <th className="p-3 border-r border-white/20">ID</th>
+                                <th className="p-3 border-r border-white/20">Name</th>
+                                <th className="p-3">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {nodeData.items.map((item: any, idx: number) => (
+                                <tr key={idx} className="hover:bg-blue-50/40">
+                                  <td className="p-3 border-r border-gray-200 font-bold text-blue-600">{item.id}</td>
+                                  <td className="p-3 border-r border-gray-200 font-medium">{item.name}</td>
+                                  <td className="p-3">
+                                    <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded-full font-bold text-[9px]">
+                                      {item.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="py-12 border-2 border-dashed border-gray-200 text-center font-mono text-xs text-gray-400">
+                          Data stream offline. Run workflow to populate.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between p-4 bg-gray-50 border border-gray-200">
+                      <div>
+                        <p className="font-bold text-xs">{comp.properties?.label || 'Action Trigger'}</p>
+                        <p className="text-[10px] text-gray-500">Triggers a persistent mutation workflow</p>
+                      </div>
+                      <button
+                        onClick={handleExecute}
+                        disabled={isExecuting}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase px-4 py-2 shadow-[2px_2px_0_0_#121212]"
+                      >
+                        Commit Action
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+`;
+    const blob = new Blob([componentCode], { type: 'text/typescript' });
+    this.triggerDownload(blob, `WorkflowUI-${new Date().getTime()}.tsx`);
+  }
+
   private triggerDownload(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

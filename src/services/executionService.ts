@@ -2,40 +2,91 @@ import { type JDCard, type ExecutionNode } from "../types";
 import { mockDataService } from "./mockDataService";
 
 export const executionService = {
-  async runGraph(jdCard: JDCard, writeEnabled: boolean, onProgress?: (stepId: string, result: any) => void): Promise<Record<string, any>> {
+  async runGraph(
+    jdCard: JDCard, 
+    writeEnabled: boolean, 
+    onProgress?: (stepId: string, result: any) => void,
+    onStart?: (stepId: string) => void,
+    onFailure?: (stepId: string, error: any) => void
+): Promise<Record<string, any>> {
     const results: Record<string, any> = {};
-    let currentNodeId: string | 'END' = jdCard.executionGraph.rootNode;
-
-    while (currentNodeId !== 'END') {
-      const node = jdCard.executionGraph.nodes[currentNodeId];
-      if (!node) break;
-
-      try {
-        const resolvedParams = this.resolveBindings(node.parameters, results);
-        
-        let result: any;
-        if (node.iterator) {
-          const list = this.resolveValue(node.iterator, results) || [];
-          result = await Promise.all(list.map(async (item: any) => {
-            const iterParams = { ...resolvedParams, ...this.resolveBindings(node.parameters, { iterator: { item } }) };
-            return this.executeRequest(node, iterParams, writeEnabled);
-          }));
-        } else {
-          result = await this.executeRequest(node, resolvedParams, writeEnabled);
+    const nodes = Object.values(jdCard.executionGraph.nodes);
+    
+    const completed = new Set<string>();
+    const running = new Set<string>();
+    
+    const getDependencies = (node: ExecutionNode): string[] => {
+      const deps: string[] = [];
+      const checkValue = (val: any) => {
+        if (typeof val === 'string') {
+          const matches = val.match(/\{\{([^}]+)\}\}/g);
+          if (matches) {
+            matches.forEach(m => {
+              const inner = m.slice(2, -2).trim();
+              const parts = inner.split('.');
+              if (parts[0] && parts[0] !== 'iterator') {
+                deps.push(parts[0]);
+              }
+            });
+          }
+        } else if (typeof val === 'object' && val !== null) {
+          Object.values(val).forEach(checkValue);
         }
-
-        results[currentNodeId] = { data: result, node };
-        onProgress?.(currentNodeId, result);
-
-        currentNodeId = node.onSuccess as any;
-      } catch (err: any) {
-        console.error(`Node ${currentNodeId} failed:`, err);
-        if (node.onFailure === 'TRIGGER_SAGA_ROLLBACK') {
-          await this.rollback(jdCard, results, writeEnabled);
-          throw new Error(`Execution halted. Saga rollback triggered: ${err.message}`);
-        }
-        currentNodeId = node.onFailure as any || 'END';
+      };
+      
+      checkValue(node.parameters);
+      if (node.iterator) {
+        checkValue(node.iterator);
       }
+      return Array.from(new Set(deps)).filter(d => jdCard.executionGraph.nodes[d]);
+    };
+
+    while (completed.size < nodes.length) {
+      const readyNodes = nodes.filter(node => 
+        !completed.has(node.id) && 
+        !running.has(node.id) &&
+        getDependencies(node).every(depId => completed.has(depId))
+      );
+
+      if (readyNodes.length === 0) {
+        if (completed.size < nodes.length) {
+          console.warn("Circular dependency or unreachable nodes detected in execution graph.");
+        }
+        break;
+      }
+
+      await Promise.all(readyNodes.map(async (node) => {
+        running.add(node.id);
+        onStart?.(node.id);
+        try {
+          const resolvedParams = this.resolveBindings(node.parameters, results);
+          
+          let result: any;
+          if (node.iterator) {
+            const list = this.resolveValue(node.iterator, results) || [];
+            result = await Promise.all(list.map(async (item: any) => {
+              const iterParams = { ...resolvedParams, ...this.resolveBindings(node.parameters, { iterator: { item } }) };
+              return this.executeRequest(node, iterParams, writeEnabled);
+            }));
+          } else {
+            result = await this.executeRequest(node, resolvedParams, writeEnabled);
+          }
+
+          results[node.id] = { data: result, node };
+          onProgress?.(node.id, result);
+          completed.add(node.id);
+        } catch (err: any) {
+          console.error(`Node ${node.id} failed:`, err);
+          onFailure?.(node.id, err);
+          if (node.onFailure === 'TRIGGER_SAGA_ROLLBACK') {
+            await this.rollback(jdCard, results, writeEnabled);
+            throw new Error(`Execution halted. Saga rollback triggered: ${err.message}`);
+          }
+          completed.add(node.id);
+        } finally {
+          running.delete(node.id);
+        }
+      }));
     }
 
     return results;
