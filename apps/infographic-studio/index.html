@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0f17" />
+<title>Infographic Studio — one-shot product infographics</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --bg-2: #111826;
+    --surface: #151d2c;
+    --surface-2: #1c2536;
+    --line: #26304400;
+    --border: #253048;
+    --text: #e8edf7;
+    --muted: #93a2bd;
+    --primary: #5b8cff;
+    --accent: #21d4a8;
+    --danger: #ff6b6b;
+    --radius: 14px;
+    --nav-h: 62px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  }
+  .app { max-width: 760px; margin: 0 auto; }
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; background: rgba(11,15,23,.92);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+  }
+  header.top .mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+  }
+  header.top h1 { font-size: 16px; margin: 0; font-weight: 700; letter-spacing: -.2px; }
+  header.top .sub { font-size: 11px; color: var(--muted); }
+  header.top .spacer { flex: 1; }
+  main { padding: 16px 16px 28px; }
+  section.view { display: none; }
+  section.view.active { display: block; }
+  h2 { font-size: 15px; margin: 0 0 10px; letter-spacing: -.1px; }
+  h3 { font-size: 13px; margin: 22px 0 8px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  p.hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px; margin-bottom: 12px;
+  }
+  .card.tap { cursor: pointer; }
+  .card.tap:active { background: var(--surface-2); }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row.wrap { flex-wrap: wrap; }
+  .grow { flex: 1; min-width: 0; }
+  .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input, select, textarea {
+    width: 100%; background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: 11px; padding: 12px 12px; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+  textarea { min-height: 110px; resize: vertical; font-size: 14px; }
+  button {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 11px; padding: 12px 14px; font-weight: 600; cursor: pointer;
+  }
+  button:active { transform: translateY(1px); }
+  button[disabled] { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: #06122e; }
+  button.accent { background: var(--accent); border-color: var(--accent); color: #04231c; }
+  button.ghost { background: transparent; }
+  button.danger { background: transparent; border-color: #4a2530; color: var(--danger); }
+  button.sm { padding: 8px 11px; font-size: 13px; border-radius: 9px; }
+  button.block { width: 100%; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row > * { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+    padding: 4px 9px; border-radius: 999px; background: var(--surface-2);
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .pill.on { color: var(--accent); border-color: #1e4a3f; }
+  .pill.warn { color: #ffc46b; border-color: #4a3d1e; }
+  .empty { text-align: center; color: var(--muted); padding: 42px 10px; }
+  .empty .big { font-size: 34px; margin-bottom: 8px; }
+  .seg { display: flex; gap: 6px; background: var(--bg-2); padding: 4px; border-radius: 12px; border: 1px solid var(--border); }
+  .seg button { flex: 1; background: transparent; border: 0; padding: 9px 6px; font-size: 13px; color: var(--muted); }
+  .seg button.on { background: var(--surface-2); color: var(--text); }
+  nav.bottom {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    display: flex; background: rgba(17,24,38,.96); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav.bottom button {
+    flex: 1; background: transparent; border: 0; border-radius: 0; padding: 9px 4px 11px;
+    color: var(--muted); font-size: 11px; font-weight: 600; display: grid; gap: 3px; justify-items: center;
+  }
+  nav.bottom button.on { color: var(--text); }
+  nav.bottom .ico { font-size: 17px; line-height: 1; }
+  .src { border: 1px solid var(--border); border-radius: 12px; padding: 11px; margin-bottom: 8px; background: var(--bg-2); }
+  .src .meta { font-size: 11px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+  .preview { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: #000; }
+  .preview svg { display: block; width: 100%; height: auto; }
+  .log { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--nav-h) + 18px + env(safe-area-inset-bottom));
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    padding: 11px 15px; border-radius: 11px; font-size: 13px; z-index: 50; max-width: 90%;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+  .toast.err { border-color: #4a2530; color: #ffb3b3; }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.25); border-top-color: var(--text); border-radius: 50%; animation: sp .7s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 6px 0; }
+  .kv span:first-child { color: var(--muted); }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  @media (min-width: 720px) {
+    main { padding: 22px 22px 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="mark"></div>
+    <div class="grow">
+      <h1>Infographic Studio</h1>
+      <div class="sub" id="providerBadge">no key configured</div>
+    </div>
+    <button class="sm ghost" id="backBtn" style="display:none">Back</button>
+  </header>
+
+  <main>
+    <!-- PROJECTS LIST -->
+    <section class="view" id="view-projects">
+      <div class="row" style="margin-bottom:12px">
+        <h2 class="grow">Projects</h2>
+        <button class="sm primary" id="newProjectBtn">+ New</button>
+      </div>
+      <div id="projectList"></div>
+    </section>
+
+    <!-- PROJECT DETAIL -->
+    <section class="view" id="view-project">
+      <div id="projectHead"></div>
+      <div class="seg" id="projectTabs" style="margin:12px 0">
+        <button data-tab="sources" class="on">Sources</button>
+        <button data-tab="style">Style</button>
+        <button data-tab="result">Result</button>
+      </div>
+      <div id="tab-sources"></div>
+      <div id="tab-style" style="display:none"></div>
+      <div id="tab-result" style="display:none"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <h2>Bring your own keys</h2>
+      <p class="hint">Keys are stored only in this browser (localStorage) and sent directly to the provider you pick. Nothing is proxied through a server.</p>
+
+      <h3>Active provider</h3>
+      <div class="seg" id="providerSeg">
+        <button data-provider="groq">Groq</button>
+        <button data-provider="openrouter">OpenRouter</button>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h2>Groq (fast inference)</h2>
+        <label for="groqKey">API key</label>
+        <input id="groqKey" type="password" placeholder="gsk_..." autocomplete="off" />
+        <label for="groqModel">Model</label>
+        <input id="groqModel" list="groqModels" placeholder="llama-3.3-70b-versatile" />
+        <datalist id="groqModels"></datalist>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="sm" id="groqTest">Test key</button>
+          <button class="sm" id="groqLoadModels">Load models</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>OpenRouter</h2>
+        <label for="orKey">API key</label>
+        <input id="orKey" type="password" placeholder="sk-or-v1-..." autocomplete="off" />
+        <label for="orModel">Model</label>
+        <input id="orModel" list="orModels" placeholder="openai/gpt-4o-mini" />
+        <datalist id="orModels"></datalist>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="sm" id="orTest">Test key</button>
+          <button class="sm" id="orLoadModels">Load models</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Source fetching</h2>
+        <label for="ghToken">GitHub token (optional, raises rate limits / private repos)</label>
+        <input id="ghToken" type="password" placeholder="github_pat_..." autocomplete="off" />
+        <label for="readerProxy">Text reader fallback (used when a URL blocks CORS)</label>
+        <input id="readerProxy" placeholder="https://r.jina.ai/" />
+        <p class="hint">Leave empty to disable the fallback and paste documents manually instead.</p>
+      </div>
+
+      <div class="btn-row">
+        <button class="primary" id="saveSettings">Save settings</button>
+        <button class="danger" id="wipeAll">Erase all data</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="bottom">
+  <button data-view="projects" class="on"><span class="ico">▤</span>Projects</button>
+  <button data-view="settings"><span class="ico">⚙</span>Settings</button>
+</nav>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ *
+ * Storage
+ * ------------------------------------------------------------------ */
+const LS_PROJECTS = "igs.v1.projects";
+const LS_SETTINGS = "igs.v1.settings";
+
+const DEFAULT_SETTINGS = {
+  provider: "groq",
+  groqKey: "",
+  groqModel: "llama-3.3-70b-versatile",
+  orKey: "",
+  orModel: "openai/gpt-4o-mini",
+  ghToken: "",
+  readerProxy: "https://r.jina.ai/"
+};
+
+const PROVIDERS = {
+  groq: { label: "Groq", base: "https://api.groq.com/openai/v1", keyField: "groqKey", modelField: "groqModel" },
+  openrouter: { label: "OpenRouter", base: "https://openrouter.ai/api/v1", keyField: "orKey", modelField: "orModel" }
+};
+
+function readJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return parsed == null ? fallback : parsed;
+  } catch (e) {
+    return fallback;
+  }
+}
+function writeJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (e) { toast("Could not save locally: " + e.message, true); }
+}
+
+let settings = Object.assign({}, DEFAULT_SETTINGS, readJSON(LS_SETTINGS, {}));
+let projects = readJSON(LS_PROJECTS, []);
+let currentId = null;
+let currentTab = "sources";
+let busy = false;
+
+const saveProjects = () => writeJSON(LS_PROJECTS, projects);
+const saveSettings = () => writeJSON(LS_SETTINGS, settings);
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const project = () => projects.find(p => p.id === currentId) || null;
+
+function touch(p) {
+  p.updatedAt = Date.now();
+  saveProjects();
+}
+
+/* ------------------------------------------------------------------ *
+ * Tiny helpers
+ * ------------------------------------------------------------------ */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+let toastTimer = null;
+function toast(msg, isError) {
+  const old = $(".toast");
+  if (old) old.remove();
+  const el = document.createElement("div");
+  el.className = "toast" + (isError ? " err" : "");
+  el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.remove(), isError ? 6000 : 3000);
+}
+
+function ago(ts) {
+  if (!ts) return "—";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return Math.floor(s / 86400) + "d ago";
+}
+
+function clamp(text, max) {
+  const s = String(text || "");
+  return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
+}
+
+/* ------------------------------------------------------------------ *
+ * Project model
+ * ------------------------------------------------------------------ */
+const DEFAULT_OPTIONS = {
+  aspect: "portrait",
+  theme: "midnight",
+  tone: "professional",
+  audience: "",
+  focus: "",
+  language: "English"
+};
+
+function createProject(name) {
+  const p = {
+    id: uid(),
+    name: name || "Untitled product",
+    description: "",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    sources: [],
+    options: Object.assign({}, DEFAULT_OPTIONS),
+    generations: []
+  };
+  projects.unshift(p);
+  saveProjects();
+  return p;
+}
+
+function normalizeProject(p) {
+  p.sources = Array.isArray(p.sources) ? p.sources : [];
+  p.generations = Array.isArray(p.generations) ? p.generations : [];
+  p.options = Object.assign({}, DEFAULT_OPTIONS, p.options || {});
+  return p;
+}
+projects = projects.map(normalizeProject);
+
+/* ------------------------------------------------------------------ *
+ * Source ingestion
+ * ------------------------------------------------------------------ */
+function parseGitHub(url) {
+  const m = String(url).match(/github\.com[/:]+([^/\s]+)\/([^/\s#?]+)/i);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2].replace(/\.git$/, "") };
+}
+
+function ghHeaders() {
+  const h = { Accept: "application/vnd.github+json" };
+  if (settings.ghToken) h.Authorization = "Bearer " + settings.ghToken;
+  return h;
+}
+
+async function ghJSON(path) {
+  const res = await fetch("https://api.github.com" + path, { headers: ghHeaders() });
+  if (!res.ok) throw new Error("GitHub " + res.status + " on " + path);
+  return res.json();
+}
+
+function decodeBase64Utf8(b64) {
+  const bin = atob(String(b64).replace(/\s/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+async function fetchRepoContext(url) {
+  const ref = parseGitHub(url);
+  if (!ref) throw new Error("Not a recognizable GitHub repository URL");
+  const base = "/repos/" + ref.owner + "/" + ref.repo;
+  const meta = await ghJSON(base);
+  const parts = [];
+  parts.push("# Repository: " + meta.full_name);
+  if (meta.description) parts.push("Description: " + meta.description);
+  if (meta.homepage) parts.push("Homepage: " + meta.homepage);
+  parts.push("Primary language: " + (meta.language || "unknown"));
+  parts.push("Stars: " + meta.stargazers_count + " | Forks: " + meta.forks_count + " | Open issues: " + meta.open_issues_count);
+  if (meta.license && meta.license.spdx_id) parts.push("License: " + meta.license.spdx_id);
+  if (Array.isArray(meta.topics) && meta.topics.length) parts.push("Topics: " + meta.topics.join(", "));
+  parts.push("Created: " + (meta.created_at || "").slice(0, 10) + " | Last push: " + (meta.pushed_at || "").slice(0, 10));
+
+  const settled = await Promise.allSettled([
+    ghJSON(base + "/languages"),
+    ghJSON(base + "/readme"),
+    ghJSON(base + "/contents")
+  ]);
+
+  if (settled[0].status === "fulfilled") {
+    const langs = settled[0].value;
+    const total = Object.values(langs).reduce((a, b) => a + b, 0) || 1;
+    const list = Object.keys(langs)
+      .sort((a, b) => langs[b] - langs[a])
+      .slice(0, 8)
+      .map(k => k + " " + Math.round((langs[k] / total) * 100) + "%");
+    if (list.length) parts.push("Language mix: " + list.join(", "));
+  }
+  if (settled[2].status === "fulfilled" && Array.isArray(settled[2].value)) {
+    const tree = settled[2].value.slice(0, 60).map(e => (e.type === "dir" ? e.name + "/" : e.name));
+    parts.push("Top-level files: " + tree.join(", "));
+  }
+  if (settled[1].status === "fulfilled" && settled[1].value && settled[1].value.content) {
+    parts.push("\n## README\n" + clamp(decodeBase64Utf8(settled[1].value.content), 14000));
+  }
+  return parts.join("\n");
+}
+
+function stripHTML(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script,style,noscript,svg,iframe").forEach(n => n.remove());
+  return (doc.body ? doc.body.textContent : "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+async function fetchUrlContext(url) {
+  const attempts = [url];
+  if (settings.readerProxy) attempts.push(settings.readerProxy.replace(/\/?$/, "/") + url.replace(/^https?:\/\//, ""));
+  let lastErr = null;
+  for (const target of attempts) {
+    try {
+      const res = await fetch(target, { headers: { Accept: "text/plain,text/html,*/*" } });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const body = await res.text();
+      const text = /<\/?[a-z][\s\S]*>/i.test(body.slice(0, 400)) ? stripHTML(body) : body;
+      if (!text.trim()) throw new Error("empty response");
+      return "# Source: " + url + "\n" + clamp(text, 14000);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(
+    "Could not read " + url + " from the browser (" + (lastErr ? lastErr.message : "unknown") +
+    "). Paste the content as a text source instead."
+  );
+}
+
+async function refreshSource(src) {
+  if (src.type === "repo") src.content = await fetchRepoContext(src.value);
+  else if (src.type === "url") src.content = await fetchUrlContext(src.value);
+  else src.content = src.value;
+  src.fetchedAt = Date.now();
+  src.chars = src.content.length;
+}
+
+/* ------------------------------------------------------------------ *
+ * LLM calls
+ * ------------------------------------------------------------------ */
+function activeProvider() {
+  return PROVIDERS[settings.provider] || PROVIDERS.groq;
+}
+function activeKey() {
+  return settings[activeProvider().keyField] || "";
+}
+function activeModel() {
+  return settings[activeProvider().modelField] || "";
+}
+
+function providerHeaders(providerId, key) {
+  const h = { "Content-Type": "application/json", Authorization: "Bearer " + key };
+  if (providerId === "openrouter") {
+    h["HTTP-Referer"] = location.origin || "https://localhost";
+    h["X-Title"] = "Infographic Studio";
+  }
+  return h;
+}
+
+async function listModels(providerId) {
+  const p = PROVIDERS[providerId];
+  const key = settings[p.keyField];
+  if (!key) throw new Error("Add a " + p.label + " API key first");
+  const res = await fetch(p.base + "/models", { headers: providerHeaders(providerId, key) });
+  if (!res.ok) throw new Error(p.label + " " + res.status + ": " + (await res.text()).slice(0, 180));
+  const data = await res.json();
+  return (data.data || []).map(m => m.id).filter(Boolean).sort();
+}
+
+async function chatJSON(systemPrompt, userPrompt) {
+  const providerId = settings.provider;
+  const p = PROVIDERS[providerId];
+  const key = activeKey();
+  const model = activeModel();
+  if (!key) throw new Error("No API key set for " + p.label + " — open Settings");
+  if (!model) throw new Error("No model set for " + p.label + " — open Settings");
+
+  const body = {
+    model,
+    temperature: 0.4,
+    max_tokens: 4096,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]
+  };
+
+  let res = await fetch(p.base + "/chat/completions", {
+    method: "POST",
+    headers: providerHeaders(providerId, key),
+    body: JSON.stringify(body)
+  });
+
+  if (res.status === 400 || res.status === 422) {
+    // Some models reject response_format; retry without it.
+    delete body.response_format;
+    res = await fetch(p.base + "/chat/completions", {
+      method: "POST",
+      headers: providerHeaders(providerId, key),
+      body: JSON.stringify(body)
+    });
+  }
+  if (!res.ok) throw new Error(p.label + " " + res.status + ": " + (await res.text()).slice(0, 240));
+
+  const data = await res.json();
+  const choice = data.choices && data.choices[0];
+  const text = choice && choice.message ? choice.message.content : "";
+  if (!text) throw new Error("Model returned an empty response");
+  return { spec: parseSpec(text), model, provider: providerId, usage: data.usage || null };
+}
+
+function parseSpec(text) {
+  let raw = String(text).trim();
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) raw = fence[1].trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start > 0 || end < raw.length - 1) {
+    if (start === -1 || end === -1) throw new Error("Model did not return JSON");
+    raw = raw.slice(start, end + 1);
+  }
+  let obj;
+  try { obj = JSON.parse(raw); }
+  catch (e) { throw new Error("Could not parse model JSON: " + e.message); }
+  return normalizeSpec(obj);
+}
+
+const asText = (v, max) => (v == null ? "" : String(v).replace(/\s+/g, " ").trim()).slice(0, max || 240);
+
+function normalizeSpec(o) {
+  const arr = v => (Array.isArray(v) ? v : []);
+  return {
+    eyebrow: asText(o.eyebrow || o.category, 42),
+    title: asText(o.title || o.name, 70) || "Untitled product",
+    subtitle: asText(o.subtitle || o.tagline, 180),
+    summary: asText(o.summary || o.description, 320),
+    highlights: arr(o.highlights || o.metrics || o.stats).slice(0, 4).map(h => ({
+      value: asText(h && (h.value || h.stat), 14),
+      label: asText(h && (h.label || h.name), 46)
+    })).filter(h => h.value || h.label),
+    features: arr(o.features || o.capabilities).slice(0, 6).map(f => ({
+      title: asText(f && (f.title || f.name), 46),
+      description: asText(f && (f.description || f.detail), 150)
+    })).filter(f => f.title),
+    flow: arr(o.flow || o.architecture || o.steps).slice(0, 5).map(s => ({
+      label: asText(s && (s.label || s.step || s.title), 40),
+      detail: asText(s && (s.detail || s.description), 90)
+    })).filter(s => s.label),
+    stack: arr(o.stack || o.techStack || o.technologies).slice(0, 14).map(s => asText(typeof s === "string" ? s : s && (s.name || s.label), 22)).filter(Boolean),
+    audience: asText(o.audience, 90),
+    cta: asText(o.cta || o.callToAction, 90),
+    footer: asText(o.footer || o.source, 90)
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Prompting
+ * ------------------------------------------------------------------ */
+const SYSTEM_PROMPT = [
+  "You are a senior product marketing designer and technical writer.",
+  "From raw project material you produce the copy for ONE professional product infographic.",
+  "Reply with a single JSON object and nothing else. Schema:",
+  "{",
+  '  "eyebrow": "2-4 word category label",',
+  '  "title": "product name, max 6 words",',
+  '  "subtitle": "one-line value proposition, max 110 chars",',
+  '  "summary": "2 sentences, max 260 chars",',
+  '  "highlights": [{"value": "short stat e.g. 12x or 4 APIs", "label": "what it means, max 40 chars"}],',
+  '  "features": [{"title": "max 5 words", "description": "max 120 chars, benefit-led"}],',
+  '  "flow": [{"label": "pipeline stage, max 4 words", "detail": "max 70 chars"}],',
+  '  "stack": ["technology names"],',
+  '  "audience": "who it is for, max 70 chars",',
+  '  "cta": "call to action, max 60 chars",',
+  '  "footer": "attribution line, max 70 chars"',
+  "}",
+  "Rules: 3-4 highlights, 4-6 features, 3-5 flow stages, up to 10 stack items.",
+  "Ground every claim in the supplied material; never invent metrics, funding, customers or awards.",
+  "If a metric is not stated, derive an honest factual one (language mix, module count, stars).",
+  "Write in confident, concrete B2B product language. No emoji, no markdown, no trailing commentary."
+].join("\n");
+
+function buildUserPrompt(p) {
+  const o = p.options;
+  const lines = [];
+  lines.push("PRODUCT: " + p.name);
+  if (p.description) lines.push("NOTES FROM OWNER: " + p.description);
+  lines.push("OUTPUT LANGUAGE: " + (o.language || "English"));
+  lines.push("TONE: " + o.tone);
+  if (o.audience) lines.push("TARGET AUDIENCE: " + o.audience);
+  if (o.focus) lines.push("MUST EMPHASIZE: " + o.focus);
+  lines.push("FORMAT: " + o.aspect + " infographic, text will be rendered as-is so respect all length limits.");
+  lines.push("");
+  lines.push("=== SOURCE MATERIAL ===");
+  const budget = Math.floor(38000 / Math.max(1, p.sources.length));
+  p.sources.forEach((s, i) => {
+    lines.push("");
+    lines.push("--- SOURCE " + (i + 1) + " [" + s.type + "] " + (s.label || s.value || "").slice(0, 120) + " ---");
+    lines.push(clamp(s.content || s.value || "", budget));
+  });
+  return lines.join("\n");
+}
+
+async function generate(p) {
+  const ready = p.sources.filter(s => (s.content || s.value || "").trim());
+  if (!ready.length) throw new Error("Add at least one source first");
+  const out = await chatJSON(SYSTEM_PROMPT, buildUserPrompt(p));
+  const gen = {
+    id: uid(),
+    createdAt: Date.now(),
+    provider: out.provider,
+    model: out.model,
+    aspect: p.options.aspect,
+    theme: p.options.theme,
+    spec: out.spec
+  };
+  p.generations.unshift(gen);
+  p.generations = p.generations.slice(0, 20);
+  touch(p);
+  return gen;
+}
+
+/* ------------------------------------------------------------------ *
+ * SVG infographic renderer
+ * ------------------------------------------------------------------ */
+const ASPECTS = {
+  portrait: { w: 1080, h: 1350, label: "Portrait 4:5" },
+  square: { w: 1080, h: 1080, label: "Square 1:1" },
+  story: { w: 1080, h: 1920, label: "Story 9:16" },
+  wide: { w: 1600, h: 900, label: "Wide 16:9" }
+};
+
+const THEMES = {
+  midnight: { bg: "#0b1120", surface: "#151f36", primary: "#5b8cff", accent: "#21d4a8", text: "#f2f6ff", muted: "#9fb0cd", label: "Midnight" },
+  daylight: { bg: "#f5f7fb", surface: "#ffffff", primary: "#2b5bd7", accent: "#0f9d76", text: "#101828", muted: "#5b6780", label: "Daylight" },
+  ember: { bg: "#170f14", surface: "#26161f", primary: "#ff7a59", accent: "#ffc75f", text: "#fff4ee", muted: "#c9a99f", label: "Ember" },
+  forest: { bg: "#0c1712", surface: "#13241c", primary: "#4ade80", accent: "#a3e635", text: "#effaf2", muted: "#9dbdaa", label: "Forest" }
+};
+
+const FONT = "'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif";
+
+function textWidth(str, size, weight) {
+  const factor = weight >= 600 ? 0.565 : 0.515;
+  return String(str).length * size * factor;
+}
+
+function wrapText(str, size, weight, maxWidth, maxLines) {
+  const words = String(str).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const w of words) {
+    const next = line ? line + " " + w : w;
+    if (textWidth(next, size, weight) > maxWidth && line) {
+      lines.push(line);
+      line = w;
+      if (maxLines && lines.length === maxLines) break;
+    } else {
+      line = next;
+    }
+  }
+  if ((!maxLines || lines.length < maxLines) && line) lines.push(line);
+  if (maxLines && lines.length === maxLines && words.length) {
+    const joined = lines.join(" ");
+    if (joined.length < str.length - 1) lines[lines.length - 1] = lines[lines.length - 1].replace(/[,;:.\s]+$/, "") + "…";
+  }
+  return lines;
+}
+
+function svgText(x, y, str, opts) {
+  const o = opts || {};
+  return '<text x="' + x + '" y="' + y + '" fill="' + (o.fill || "#fff") + '" font-family="' + FONT +
+    '" font-size="' + (o.size || 24) + '" font-weight="' + (o.weight || 400) + '"' +
+    (o.anchor ? ' text-anchor="' + o.anchor + '"' : "") +
+    (o.spacing ? ' letter-spacing="' + o.spacing + '"' : "") +
+    (o.opacity ? ' opacity="' + o.opacity + '"' : "") +
+    ">" + esc(str) + "</text>";
+}
+
+function renderInfographic(spec, aspectKey, themeKey) {
+  const A = ASPECTS[aspectKey] || ASPECTS.portrait;
+  const T = THEMES[themeKey] || THEMES.midnight;
+  const W = A.w, H = A.h;
+  const pad = Math.round(W * 0.065);
+  const cw = W - pad * 2;
+  const out = [];
+  let y = pad;
+
+  // eyebrow
+  if (spec.eyebrow) {
+    y += 26;
+    out.push(svgText(pad, y, spec.eyebrow.toUpperCase(), { fill: T.accent, size: 22, weight: 700, spacing: 3 }));
+    y += 26;
+  }
+
+  // title
+  const titleSize = W > 1200 ? 74 : 66;
+  wrapText(spec.title, titleSize, 700, cw, 3).forEach(line => {
+    y += titleSize + 6;
+    out.push(svgText(pad, y, line, { fill: T.text, size: titleSize, weight: 700 }));
+  });
+
+  // subtitle
+  if (spec.subtitle) {
+    y += 14;
+    wrapText(spec.subtitle, 32, 400, cw, 3).forEach(line => {
+      y += 40;
+      out.push(svgText(pad, y, line, { fill: T.primary, size: 32, weight: 600 }));
+    });
+  }
+
+  // summary
+  if (spec.summary) {
+    y += 12;
+    wrapText(spec.summary, 25, 400, cw, 4).forEach(line => {
+      y += 33;
+      out.push(svgText(pad, y, line, { fill: T.muted, size: 25 }));
+    });
+  }
+
+  // highlights
+  if (spec.highlights.length) {
+    y += 34;
+    const cols = spec.highlights.length >= 3 ? (W > 1200 ? 4 : 2) : spec.highlights.length;
+    const gap = 16;
+    const bw = Math.floor((cw - gap * (cols - 1)) / cols);
+    const rows = Math.ceil(spec.highlights.length / cols);
+    const bh = 132;
+    for (let i = 0; i < spec.highlights.length; i++) {
+      const h = spec.highlights[i];
+      const cx = pad + (i % cols) * (bw + gap);
+      const cy = y + Math.floor(i / cols) * (bh + gap);
+      out.push('<rect x="' + cx + '" y="' + cy + '" width="' + bw + '" height="' + bh + '" rx="18" fill="' + T.surface + '"/>');
+      out.push('<rect x="' + cx + '" y="' + cy + '" width="6" height="' + bh + '" rx="3" fill="' + T.accent + '"/>');
+      out.push(svgText(cx + 24, cy + 62, h.value, { fill: T.text, size: 44, weight: 700 }));
+      wrapText(h.label, 20, 400, bw - 44, 2).forEach((line, li) => {
+        out.push(svgText(cx + 24, cy + 92 + li * 25, line, { fill: T.muted, size: 20 }));
+      });
+    }
+    y += rows * (bh + gap) - gap;
+  }
+
+  // features
+  if (spec.features.length) {
+    y += 44;
+    out.push(svgText(pad, y, "CAPABILITIES", { fill: T.muted, size: 20, weight: 700, spacing: 3 }));
+    y += 18;
+    const twoCol = W > 1200 && spec.features.length > 3;
+    const colW = twoCol ? Math.floor((cw - 40) / 2) : cw;
+    let colY = [y, y];
+    spec.features.forEach((f, i) => {
+      const col = twoCol ? i % 2 : 0;
+      const x = pad + col * (colW + 40);
+      let cy = colY[col] + 40;
+      out.push('<circle cx="' + (x + 9) + '" cy="' + (cy - 10) + '" r="9" fill="' + T.primary + '"/>');
+      out.push(svgText(x + 32, cy, f.title, { fill: T.text, size: 30, weight: 700 }));
+      wrapText(f.description, 23, 400, colW - 34, 3).forEach(line => {
+        cy += 30;
+        out.push(svgText(x + 32, cy, line, { fill: T.muted, size: 23 }));
+      });
+      colY[col] = cy + 12;
+    });
+    y = Math.max(colY[0], colY[1]);
+  }
+
+  // flow
+  if (spec.flow.length) {
+    y += 42;
+    out.push(svgText(pad, y, "HOW IT WORKS", { fill: T.muted, size: 20, weight: 700, spacing: 3 }));
+    y += 22;
+    const n = spec.flow.length;
+    const gap = 14;
+    const bw = Math.floor((cw - gap * (n - 1)) / n);
+    const bh = 150;
+    spec.flow.forEach((s, i) => {
+      const x = pad + i * (bw + gap);
+      out.push('<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + bh + '" rx="16" fill="' + T.surface + '"/>');
+      out.push(svgText(x + 16, y + 40, String(i + 1).padStart(2, "0"), { fill: T.accent, size: 26, weight: 700 }));
+      let ty = y + 44;
+      wrapText(s.label, 22, 700, bw - 32, 2).forEach(line => {
+        ty += 26;
+        out.push(svgText(x + 16, ty, line, { fill: T.text, size: 22, weight: 700 }));
+      });
+      wrapText(s.detail, 17, 400, bw - 32, 3).forEach(line => {
+        ty += 21;
+        out.push(svgText(x + 16, ty, line, { fill: T.muted, size: 17 }));
+      });
+      if (i < n - 1) {
+        out.push(svgText(x + bw + gap / 2, y + bh / 2 + 8, "›", { fill: T.primary, size: 30, weight: 700, anchor: "middle" }));
+      }
+    });
+    y += bh;
+  }
+
+  // stack chips
+  if (spec.stack.length) {
+    y += 42;
+    out.push(svgText(pad, y, "BUILT WITH", { fill: T.muted, size: 20, weight: 700, spacing: 3 }));
+    y += 20;
+    let cx = pad, rowH = 46;
+    y += rowH - 12;
+    spec.stack.forEach(tech => {
+      const w = Math.ceil(textWidth(tech, 21, 600)) + 34;
+      if (cx + w > pad + cw) { cx = pad; y += rowH + 10; }
+      out.push('<rect x="' + cx + '" y="' + (y - 30) + '" width="' + w + '" height="' + rowH + '" rx="23" fill="none" stroke="' + T.primary + '" stroke-opacity="0.55"/>');
+      out.push(svgText(cx + 17, y, tech, { fill: T.text, size: 21, weight: 600 }));
+      cx += w + 10;
+    });
+    y += 16;
+  }
+
+  // footer band
+  y += 44;
+  const footerLines = [];
+  if (spec.audience) footerLines.push("For " + spec.audience);
+  if (spec.cta) footerLines.push(spec.cta);
+  if (footerLines.length) {
+    out.push('<rect x="' + pad + '" y="' + y + '" width="' + cw + '" height="' + (footerLines.length * 42 + 34) + '" rx="18" fill="' + T.primary + '" fill-opacity="0.14" stroke="' + T.primary + '" stroke-opacity="0.4"/>');
+    let fy = y + 22;
+    footerLines.forEach((line, i) => {
+      fy += 36;
+      out.push(svgText(pad + 26, fy, line, { fill: i === 0 ? T.text : T.accent, size: 27, weight: 700 }));
+    });
+    y += footerLines.length * 42 + 34;
+  }
+  if (spec.footer) {
+    y += 40;
+    out.push(svgText(pad, y, spec.footer, { fill: T.muted, size: 19 }));
+  }
+
+  const contentH = y + pad;
+  const scale = contentH > H ? H / contentH : 1;
+  const offset = contentH < H ? Math.round((H - contentH) / 2) : 0;
+
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" role="img">' +
+    '<rect width="' + W + '" height="' + H + '" fill="' + T.bg + '"/>' +
+    '<circle cx="' + W + '" cy="0" r="' + Math.round(W * 0.5) + '" fill="' + T.primary + '" fill-opacity="0.10"/>' +
+    '<circle cx="0" cy="' + H + '" r="' + Math.round(W * 0.42) + '" fill="' + T.accent + '" fill-opacity="0.08"/>' +
+    '<g transform="translate(0,' + offset + ') scale(' + scale.toFixed(4) + ')">' + out.join("") + "</g>" +
+    "</svg>";
+}
+
+/* ------------------------------------------------------------------ *
+ * Export
+ * ------------------------------------------------------------------ */
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function slug(s) {
+  return String(s || "infographic").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "infographic";
+}
+
+function downloadSVG(gen, name) {
+  const svg = renderInfographic(gen.spec, gen.aspect, gen.theme);
+  download(new Blob([svg], { type: "image/svg+xml" }), slug(name) + "-" + gen.aspect + ".svg");
+}
+
+function downloadPNG(gen, name, scaleFactor) {
+  const svg = renderInfographic(gen.spec, gen.aspect, gen.theme);
+  const A = ASPECTS[gen.aspect] || ASPECTS.portrait;
+  const factor = scaleFactor || 2;
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = A.w * factor;
+    canvas.height = A.h * factor;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+      if (!blob) return toast("PNG export failed", true);
+      download(blob, slug(name) + "-" + gen.aspect + ".png");
+    }, "image/png");
+  };
+  img.onerror = () => toast("PNG export failed — use SVG export instead", true);
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+async function copyText(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast((label || "Copied") + " to clipboard");
+  } catch (e) {
+    toast("Clipboard blocked by browser", true);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Views
+ * ------------------------------------------------------------------ */
+function setView(name) {
+  $$("section.view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+  $$("nav.bottom button").forEach(b => b.classList.toggle("on", b.dataset.view === name));
+  $("#backBtn").style.display = name === "project" ? "block" : "none";
+  window.scrollTo(0, 0);
+}
+
+function renderBadge() {
+  const p = activeProvider();
+  const hasKey = !!activeKey();
+  $("#providerBadge").textContent = hasKey
+    ? p.label + " · " + (activeModel() || "no model")
+    : "no " + p.label + " key — open Settings";
+}
+
+function renderProjects() {
+  const el = $("#projectList");
+  if (!projects.length) {
+    el.innerHTML = '<div class="empty"><div class="big">◆</div>No projects yet.<br />Create one, drop in a repo URL or docs, and generate an infographic.</div>';
+    return;
+  }
+  el.innerHTML = projects.map(p => {
+    const last = p.generations[0];
+    return '<div class="card tap" data-open="' + p.id + '">' +
+      '<div class="row"><div class="grow"><div style="font-weight:700">' + esc(p.name) + "</div>" +
+      '<div class="hint">' + p.sources.length + " source" + (p.sources.length === 1 ? "" : "s") + " · " +
+      p.generations.length + " generation" + (p.generations.length === 1 ? "" : "s") + " · " + ago(p.updatedAt) + "</div></div>" +
+      (last ? '<span class="pill on">ready</span>' : '<span class="pill">draft</span>') + "</div>" +
+      (p.description ? '<div class="hint ellipsis" style="margin-top:8px">' + esc(p.description) + "</div>" : "") +
+      "</div>";
+  }).join("");
+}
+
+function renderProject() {
+  const p = project();
+  if (!p) { setView("projects"); return; }
+
+  $("#projectHead").innerHTML =
+    '<div class="card">' +
+      '<label for="pName">Project name</label>' +
+      '<input id="pName" value="' + esc(p.name) + '" />' +
+      '<label for="pDesc">What is this product? (owner notes, optional)</label>' +
+      '<textarea id="pDesc" placeholder="Positioning, differentiators, anything the sources do not say">' + esc(p.description) + "</textarea>" +
+      '<div class="btn-row" style="margin-top:12px">' +
+        '<button class="sm" id="pSave">Save</button>' +
+        '<button class="sm" id="pDuplicate">Duplicate</button>' +
+        '<button class="sm danger" id="pDelete">Delete</button>' +
+      "</div>" +
+    "</div>";
+
+  $$("#projectTabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === currentTab));
+  ["sources", "style", "result"].forEach(t => {
+    $("#tab-" + t).style.display = t === currentTab ? "block" : "none";
+  });
+
+  renderSources(p);
+  renderStyle(p);
+  renderResult(p);
+}
+
+function renderSources(p) {
+  const list = p.sources.map(s =>
+    '<div class="src">' +
+      '<div class="row"><span class="pill">' + esc(s.type) + "</span>" +
+      '<div class="grow ellipsis" style="font-weight:600">' + esc(s.label || s.value || "source") + "</div>" +
+      (s.type !== "text" ? '<button class="sm ghost" data-refresh="' + s.id + '">↻</button>' : "") +
+      '<button class="sm danger" data-delsrc="' + s.id + '">✕</button></div>' +
+      '<div class="meta">' + (s.content ? (s.chars || s.content.length) + " chars · fetched " + ago(s.fetchedAt) : "not fetched yet") +
+      (s.error ? " · " + esc(s.error) : "") + "</div>" +
+      (s.content ? '<details style="margin-top:8px"><summary>Preview</summary><div class="log" style="margin-top:6px">' + esc(clamp(s.content, 1200)) + "</div></details>" : "") +
+    "</div>"
+  ).join("");
+
+  $("#tab-sources").innerHTML =
+    (list || '<p class="hint">No sources yet. Add a GitHub repo, a docs URL, or paste text.</p>') +
+    '<h3>Add source</h3>' +
+    '<div class="card">' +
+      '<div class="seg" id="srcTypeSeg">' +
+        '<button data-st="repo" class="on">Repo URL</button>' +
+        '<button data-st="url">Web / docs URL</button>' +
+        '<button data-st="text">Paste text</button>' +
+      "</div>" +
+      '<div id="srcInputWrap" style="margin-top:12px"></div>' +
+      '<button class="primary block" id="addSrcBtn" style="margin-top:12px">Add source</button>' +
+    "</div>" +
+    '<button class="accent block" id="genBtn" style="margin-top:6px">⚡ Generate infographic</button>' +
+    '<p class="hint">Uses ' + esc(activeProvider().label) + " · " + esc(activeModel() || "no model") + "</p>";
+
+  renderSourceInput();
+}
+
+let srcType = "repo";
+function renderSourceInput() {
+  const wrap = $("#srcInputWrap");
+  if (!wrap) return;
+  if (srcType === "text") {
+    wrap.innerHTML = '<label for="srcLabel">Label</label><input id="srcLabel" placeholder="PRD, spec, changelog…" />' +
+      '<label for="srcValue">Content</label><textarea id="srcValue" placeholder="Paste product docs, README, transcript…"></textarea>';
+  } else {
+    wrap.innerHTML = '<label for="srcValue">' + (srcType === "repo" ? "GitHub repository URL" : "Documentation / landing page URL") + "</label>" +
+      '<input id="srcValue" placeholder="' + (srcType === "repo" ? "https://github.com/owner/repo" : "https://example.com/docs") + '" />' +
+      '<p class="hint">' + (srcType === "repo"
+        ? "Pulls metadata, language mix, file tree and README via the GitHub API."
+        : "Fetched in-browser; falls back to the reader proxy from Settings when CORS blocks it.") + "</p>";
+  }
+  $$("#srcTypeSeg button").forEach(b => b.classList.toggle("on", b.dataset.st === srcType));
+}
+
+function renderStyle(p) {
+  const o = p.options;
+  const opt = (v, cur, label) => '<option value="' + v + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>";
+  $("#tab-style").innerHTML =
+    '<div class="card">' +
+      '<label for="oAspect">Format</label><select id="oAspect">' +
+        Object.keys(ASPECTS).map(k => opt(k, o.aspect, ASPECTS[k].label)).join("") + "</select>" +
+      '<label for="oTheme">Theme</label><select id="oTheme">' +
+        Object.keys(THEMES).map(k => opt(k, o.theme, THEMES[k].label)).join("") + "</select>" +
+      '<label for="oTone">Tone</label><select id="oTone">' +
+        ["professional", "technical", "bold", "friendly", "enterprise"].map(k => opt(k, o.tone, k)).join("") + "</select>" +
+      '<label for="oLanguage">Output language</label><input id="oLanguage" value="' + esc(o.language) + '" />' +
+      '<label for="oAudience">Target audience</label><input id="oAudience" value="' + esc(o.audience) + '" placeholder="Platform engineers, CTOs…" />' +
+      '<label for="oFocus">Must emphasize</label><input id="oFocus" value="' + esc(o.focus) + '" placeholder="Self-hosting, latency, compliance…" />' +
+      '<button class="primary block" id="oSave" style="margin-top:14px">Save style</button>' +
+    "</div>" +
+    '<p class="hint">Format and theme apply instantly to existing generations — no re-run needed.</p>';
+}
+
+function renderResult(p) {
+  const gen = p.generations[0];
+  const el = $("#tab-result");
+  if (!gen) {
+    el.innerHTML = '<div class="empty"><div class="big">✨</div>No infographic yet.<br />Add sources, then hit Generate.</div>';
+    return;
+  }
+  const svg = renderInfographic(gen.spec, p.options.aspect, p.options.theme);
+  el.innerHTML =
+    '<div class="preview">' + svg + "</div>" +
+    '<div class="btn-row" style="margin-top:12px">' +
+      '<button class="primary" id="dlPng">PNG</button>' +
+      '<button id="dlSvg">SVG</button>' +
+      '<button id="cpJson">JSON</button>' +
+    "</div>" +
+    '<div class="card" style="margin-top:12px">' +
+      '<div class="kv"><span>Model</span><span>' + esc(gen.model) + "</span></div>" +
+      '<div class="kv"><span>Provider</span><span>' + esc((PROVIDERS[gen.provider] || {}).label || gen.provider) + "</span></div>" +
+      '<div class="kv"><span>Generated</span><span>' + ago(gen.createdAt) + "</span></div>" +
+      '<div class="kv"><span>Format</span><span>' + esc((ASPECTS[p.options.aspect] || {}).label || "") + "</span></div>" +
+    "</div>" +
+    '<button class="accent block" id="regenBtn">⚡ Regenerate</button>' +
+    (p.generations.length > 1
+      ? "<h3>History</h3>" + p.generations.slice(1).map(g =>
+          '<div class="card tap" data-usegen="' + g.id + '"><div class="row"><div class="grow"><div style="font-weight:600">' +
+          esc(g.spec.title) + '</div><div class="hint">' + esc(g.model) + " · " + ago(g.createdAt) +
+          '</div></div><span class="pill">restore</span></div></div>').join("")
+      : "");
+}
+
+function renderSettings() {
+  $("#groqKey").value = settings.groqKey;
+  $("#groqModel").value = settings.groqModel;
+  $("#orKey").value = settings.orKey;
+  $("#orModel").value = settings.orModel;
+  $("#ghToken").value = settings.ghToken;
+  $("#readerProxy").value = settings.readerProxy;
+  $$("#providerSeg button").forEach(b => b.classList.toggle("on", b.dataset.provider === settings.provider));
+}
+
+function renderAll() {
+  renderBadge();
+  renderProjects();
+  if (currentId) renderProject();
+  renderSettings();
+}
+
+/* ------------------------------------------------------------------ *
+ * Events
+ * ------------------------------------------------------------------ */
+async function withBusy(btn, fn) {
+  if (busy) return;
+  busy = true;
+  const label = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
+  try {
+    await fn();
+  } catch (e) {
+    toast(e.message || String(e), true);
+  } finally {
+    busy = false;
+    if (btn && document.body.contains(btn)) { btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+
+$$("nav.bottom button").forEach(b => b.addEventListener("click", () => {
+  currentId = null;
+  setView(b.dataset.view);
+}));
+
+$("#backBtn").addEventListener("click", () => { currentId = null; renderProjects(); setView("projects"); });
+
+$("#newProjectBtn").addEventListener("click", () => {
+  const p = createProject("Untitled product");
+  currentId = p.id;
+  currentTab = "sources";
+  renderProjects();
+  renderProject();
+  setView("project");
+});
+
+$("#projectList").addEventListener("click", e => {
+  const card = e.target.closest("[data-open]");
+  if (!card) return;
+  currentId = card.dataset.open;
+  currentTab = "sources";
+  renderProject();
+  setView("project");
+});
+
+$("#projectTabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tab]");
+  if (!b) return;
+  currentTab = b.dataset.tab;
+  renderProject();
+});
+
+$("#view-project").addEventListener("click", async e => {
+  const p = project();
+  if (!p) return;
+  const t = e.target;
+
+  if (t.closest("#pSave")) {
+    p.name = $("#pName").value.trim() || "Untitled product";
+    p.description = $("#pDesc").value.trim();
+    touch(p);
+    renderProjects();
+    renderProject();
+    return toast("Project saved");
+  }
+  if (t.closest("#pDuplicate")) {
+    const copy = JSON.parse(JSON.stringify(p));
+    copy.id = uid();
+    copy.name = p.name + " (copy)";
+    copy.createdAt = copy.updatedAt = Date.now();
+    projects.unshift(copy);
+    saveProjects();
+    currentId = copy.id;
+    renderProjects();
+    renderProject();
+    return toast("Duplicated");
+  }
+  if (t.closest("#pDelete")) {
+    if (!confirm("Delete “" + p.name + "” and its generations?")) return;
+    projects = projects.filter(x => x.id !== p.id);
+    saveProjects();
+    currentId = null;
+    renderProjects();
+    setView("projects");
+    return toast("Project deleted");
+  }
+
+  const seg = t.closest("#srcTypeSeg button");
+  if (seg) { srcType = seg.dataset.st; return renderSourceInput(); }
+
+  if (t.closest("#addSrcBtn")) {
+    const value = ($("#srcValue").value || "").trim();
+    if (!value) return toast("Nothing to add", true);
+    const labelEl = $("#srcLabel");
+    const src = {
+      id: uid(),
+      type: srcType,
+      value,
+      label: srcType === "text" ? ((labelEl && labelEl.value.trim()) || "Pasted document") : value,
+      content: "",
+      error: ""
+    };
+    p.sources.push(src);
+    touch(p);
+    renderProject();
+    return withBusy(null, async () => {
+      try {
+        await refreshSource(src);
+        src.error = "";
+        toast("Source added (" + src.chars + " chars)");
+      } catch (err) {
+        src.error = err.message;
+        toast(err.message, true);
+      }
+      touch(p);
+      renderProject();
+    });
+  }
+
+  const del = t.closest("[data-delsrc]");
+  if (del) {
+    p.sources = p.sources.filter(s => s.id !== del.dataset.delsrc);
+    touch(p);
+    return renderProject();
+  }
+
+  const ref = t.closest("[data-refresh]");
+  if (ref) {
+    const src = p.sources.find(s => s.id === ref.dataset.refresh);
+    if (!src) return;
+    return withBusy(ref, async () => {
+      try {
+        await refreshSource(src);
+        src.error = "";
+        toast("Source refreshed");
+      } catch (err) {
+        src.error = err.message;
+        throw err;
+      } finally {
+        touch(p);
+        renderProject();
+      }
+    });
+  }
+
+  if (t.closest("#oSave")) {
+    p.options.aspect = $("#oAspect").value;
+    p.options.theme = $("#oTheme").value;
+    p.options.tone = $("#oTone").value;
+    p.options.language = $("#oLanguage").value.trim() || "English";
+    p.options.audience = $("#oAudience").value.trim();
+    p.options.focus = $("#oFocus").value.trim();
+    touch(p);
+    renderProject();
+    return toast("Style saved");
+  }
+
+  const genBtn = t.closest("#genBtn") || t.closest("#regenBtn");
+  if (genBtn) {
+    return withBusy(genBtn, async () => {
+      await generate(p);
+      currentTab = "result";
+      renderProjects();
+      renderProject();
+      toast("Infographic generated");
+    });
+  }
+
+  if (t.closest("#dlPng")) return downloadPNG(p.generations[0], p.name, 2);
+  if (t.closest("#dlSvg")) return downloadSVG(p.generations[0], p.name);
+  if (t.closest("#cpJson")) return copyText(JSON.stringify(p.generations[0].spec, null, 2), "Spec JSON copied");
+
+  const use = t.closest("[data-usegen]");
+  if (use) {
+    const idx = p.generations.findIndex(g => g.id === use.dataset.usegen);
+    if (idx > 0) {
+      const [g] = p.generations.splice(idx, 1);
+      p.generations.unshift(g);
+      touch(p);
+      renderProject();
+      toast("Generation restored");
+    }
+  }
+});
+
+$("#providerSeg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-provider]");
+  if (!b) return;
+  settings.provider = b.dataset.provider;
+  saveSettings();
+  renderSettings();
+  renderBadge();
+  if (currentId) renderProject();
+});
+
+$("#saveSettings").addEventListener("click", () => {
+  settings.groqKey = $("#groqKey").value.trim();
+  settings.groqModel = $("#groqModel").value.trim() || DEFAULT_SETTINGS.groqModel;
+  settings.orKey = $("#orKey").value.trim();
+  settings.orModel = $("#orModel").value.trim() || DEFAULT_SETTINGS.orModel;
+  settings.ghToken = $("#ghToken").value.trim();
+  settings.readerProxy = $("#readerProxy").value.trim();
+  saveSettings();
+  renderBadge();
+  if (currentId) renderProject();
+  toast("Settings saved locally");
+});
+
+$("#wipeAll").addEventListener("click", () => {
+  if (!confirm("Erase all projects, generations and keys from this browser?")) return;
+  localStorage.removeItem(LS_PROJECTS);
+  localStorage.removeItem(LS_SETTINGS);
+  projects = [];
+  settings = Object.assign({}, DEFAULT_SETTINGS);
+  currentId = null;
+  renderAll();
+  setView("projects");
+  toast("Local data erased");
+});
+
+function wireProviderButtons(providerId, testBtnSel, loadBtnSel, datalistSel, modelInputSel) {
+  $(testBtnSel).addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    settings.groqKey = $("#groqKey").value.trim();
+    settings.orKey = $("#orKey").value.trim();
+    saveSettings();
+    const models = await listModels(providerId);
+    toast(PROVIDERS[providerId].label + " key works — " + models.length + " models available");
+  }));
+  $(loadBtnSel).addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    settings.groqKey = $("#groqKey").value.trim();
+    settings.orKey = $("#orKey").value.trim();
+    saveSettings();
+    const models = await listModels(providerId);
+    $(datalistSel).innerHTML = models.map(m => '<option value="' + esc(m) + '"></option>').join("");
+    toast(models.length + " models loaded — pick one in the model field");
+    $(modelInputSel).focus();
+  }));
+}
+wireProviderButtons("groq", "#groqTest", "#groqLoadModels", "#groqModels", "#groqModel");
+wireProviderButtons("openrouter", "#orTest", "#orLoadModels", "#orModels", "#orModel");
+
+/* ------------------------------------------------------------------ *
+ * Boot
+ * ------------------------------------------------------------------ */
+renderAll();
+setView(activeKey() || projects.length ? "projects" : "settings");
+</script>
+</body>
+</html>
